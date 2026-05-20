@@ -1,0 +1,48 @@
+# Stack Postal MTA - rodar em servidor separado idealmente
+name: postal
+
+services:
+  postal_mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${POSTAL_DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: postal
+      MARIADB_USER: postal
+      MARIADB_PASSWORD: ${POSTAL_DB_PASSWORD}
+    volumes:
+      - postal_db:/var/lib/mysql
+    networks:
+      - postal
+
+  postal:
+    image: ghcr.io/postalserver/postal:3
+    restart: unless-stopped
+    command: postal run
+    depends_on:
+      - postal_mariadb
+    volumes:
+      - ./postal/config:/config
+    ports:
+      - "5000:5000"
+      - "25:25"
+    networks:
+      - postal
+
+  postal_smtp:
+    image: ghcr.io/postalserver/postal:3
+    restart: unless-stopped
+    command: postal smtp-server
+    depends_on:
+      - postal
+    volumes:
+      - ./postal/config:/config
+    networks:
+      - postal
+
+volumes:
+  postal_db:
+
+networks:
+  postal:
+    driver: bridge

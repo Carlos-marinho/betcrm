@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saldo liberado</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+
+<tr><td align="center" style="padding:40px 20px 30px;background:linear-gradient(135deg,#00C853 0%,#009624 100%);">
+  <p style="margin:0;color:#fff;font-size:60px;">🎉</p>
+  <h1 style="margin:16px 0 0;color:#fff;font-size:28px;font-weight:800;">Saldo liberado!</h1>
+</td></tr>
+
+<tr><td align="center" style="padding:40px 40px 20px;">
+  <p style="margin:0 0 12px;color:#b0b0b0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Saldo Total Disponível</p>
+  <p style="margin:0;color:#FFD700;font-size:48px;font-weight:900;">{{ saldo_total|brl }}</p>
+  <p style="margin:12px 0 0;color:#888;font-size:14px;">
+    Depósito: {{ amount|brl }} + Bônus: {{ bonus_amount|brl }}
+  </p>
+</td></tr>
+
+<tr><td align="center" style="padding:20px 40px 30px;">
+  <a href="{{ site_url }}/jogar" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
+    COMEÇAR A JOGAR
+  </a>
+</td></tr>
+
+<tr><td style="padding:20px 40px;">
+  <p style="margin:0 0 20px;color:#fff;font-size:18px;font-weight:600;">Onde quer começar?</p>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="33%" align="center" style="padding:12px;">
+        <a href="{{ site_url }}/aviator" style="text-decoration:none;">
+          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
+            <p style="margin:0 0 8px;font-size:32px;">✈️</p>
+            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Aviator</p>
+          </div>
+        </a>
+      </td>
+      <td width="33%" align="center" style="padding:12px;">
+        <a href="{{ site_url }}/fortune-tiger" style="text-decoration:none;">
+          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
+            <p style="margin:0 0 8px;font-size:32px;">🐯</p>
+            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Fortune Tiger</p>
+          </div>
+        </a>
+      </td>
+      <td width="33%" align="center" style="padding:12px;">
+        <a href="{{ site_url }}/ao-vivo" style="text-decoration:none;">
+          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
+            <p style="margin:0 0 8px;font-size:32px;">🎲</p>
+            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Ao Vivo</p>
+          </div>
+        </a>
+      </td>
+    </tr>
+  </table>
+</td></tr>
+
+<tr><td align="center" style="padding:30px 40px 40px;">
+  <p style="margin:0;color:#666;font-size:12px;">
+    ⚠️ Jogue com responsabilidade. +18.<br>
+    <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a>
+  </p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

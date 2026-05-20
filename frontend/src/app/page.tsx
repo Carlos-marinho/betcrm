@@ -1,0 +1,176 @@
+"use client";
+
+import { DashboardShell } from "@/components/dashboard/shell";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { useAnalyticsOverview, useRecentEvents } from "@/lib/hooks";
+import { Users, TrendingUp, MessageSquare, Workflow } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useEffect } from "react";
+import { isAuthenticated } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+
+function eventColor(type: string) {
+  if (type.includes("deposit.completed")) return "badge-teal";
+  if (type.includes("deposit.started")) return "badge-gold";
+  if (type.includes("withdrawal")) return "badge-muted";
+  if (type.includes("register")) return "badge-gold";
+  if (type.includes("bonus")) return "badge-teal";
+  if (type.includes("failed")) return "badge-red";
+  return "badge-muted";
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const { data, isLoading } = useAnalyticsOverview(24);
+  const { data: eventsData } = useRecentEvents({ limit: 8, hours: 24 });
+
+  useEffect(() => {
+    if (!isAuthenticated()) router.push("/login");
+  }, [router]);
+
+  const ftdRate =
+    data && data.profiles.total > 0
+      ? ((data.profiles.ftd / data.profiles.total) * 100).toFixed(1) + "%"
+      : "—";
+
+  const liveEvents = eventsData?.results ?? [];
+
+  return (
+    <DashboardShell>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="font-display font-bold text-2xl text-foreground">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Últimas 24h · atualiza a cada 30s</p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-teal">
+            <span className="live-dot" />
+            Ao vivo
+          </div>
+        </div>
+
+        {/* KPI Grid */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            title="Total de Perfis"
+            value={isLoading ? "—" : (data?.profiles.total ?? 0).toLocaleString("pt-BR")}
+            description={`+${data?.profiles.new ?? 0} novos hoje`}
+            icon={<Users />}
+            accent="default"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Conversão FTD"
+            value={isLoading ? "—" : ftdRate}
+            description={`${data?.profiles.ftd ?? 0} FTDs hoje`}
+            icon={<TrendingUp />}
+            accent="gold"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Mensagens (24h)"
+            value={isLoading ? "—" : (data?.messages.sent ?? 0).toLocaleString("pt-BR")}
+            description={`${data?.messages.open_rate ?? 0}% taxa de abertura`}
+            icon={<MessageSquare />}
+            accent="teal"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Fluxos Ativos"
+            value={isLoading ? "—" : data?.flows.active ?? 0}
+            description={`${data?.flows.executions_active ?? 0} execuções ativas`}
+            icon={<Workflow />}
+            accent="default"
+            loading={isLoading}
+          />
+        </div>
+
+        {/* Bottom Grid */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Live Events Feed */}
+          <div className="card-vault p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold text-sm">Feed de Eventos</h3>
+              <div className="flex items-center gap-1.5 text-xs text-teal">
+                <span className="live-dot" />
+                ao vivo
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {liveEvents.length === 0 && (
+                <p className="text-xs text-muted-foreground py-4 text-center">
+                  Nenhum evento nas últimas 24h
+                </p>
+              )}
+              {liveEvents.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between py-2 border-b border-border/60 last:border-0 animate-fade-up"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={eventColor(ev.event_type_code)}>
+                      {ev.event_type_code.split(".").slice(-1)[0]}
+                    </span>
+                    <span className="text-xs font-data text-muted-foreground truncate">
+                      {ev.user_external_id}
+                    </span>
+                  </div>
+                  <span className="text-xs font-data text-muted-foreground/60 shrink-0 ml-2">
+                    {formatDistanceToNow(new Date(ev.occurred_at), { locale: ptBR, addSuffix: true })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Messages Breakdown */}
+          <div className="card-vault p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold text-sm">Performance de Mensagens</h3>
+              <span className="badge-muted">24h</span>
+            </div>
+
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-8 shimmer-bg rounded" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {[
+                  { label: "Enviadas", value: data?.messages.sent ?? 0, max: data?.messages.total ?? 1, color: "bg-gold" },
+                  { label: "Entregues", value: data?.messages.delivered ?? 0, max: data?.messages.total ?? 1, color: "bg-teal" },
+                  { label: "Abertas", value: data?.messages.opened ?? 0, max: data?.messages.total ?? 1, color: "bg-teal/60" },
+                  { label: "Clicadas", value: data?.messages.clicked ?? 0, max: data?.messages.total ?? 1, color: "bg-teal/30" },
+                ].map((row) => {
+                  const pct = row.max > 0 ? Math.round((row.value / row.max) * 100) : 0;
+                  return (
+                    <div key={row.label} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{row.label}</span>
+                        <span className="font-data text-foreground">
+                          {row.value.toLocaleString("pt-BR")}
+                          <span className="text-muted-foreground ml-1">({pct}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-1 bg-border rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${row.color} rounded-full transition-all duration-700`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </DashboardShell>
+  );
+}

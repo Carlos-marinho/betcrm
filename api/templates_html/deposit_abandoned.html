@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Algo deu errado?</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;">
+
+<tr><td align="center" style="padding:50px 40px 20px;">
+  <p style="margin:0;font-size:50px;">⏱️</p>
+  <h1 style="margin:20px 0 12px;color:#fff;font-size:26px;font-weight:700;">Algo deu errado, {{ first_name }}?</h1>
+  <p style="margin:0;color:#b0b0b0;font-size:16px;line-height:1.5;">
+    Vimos que seu depósito de <strong style="color:#FFD700;">{{ amount|brl }}</strong> ficou no meio do caminho.
+  </p>
+</td></tr>
+
+<tr><td style="padding:30px 40px;">
+  <p style="margin:0 0 16px;color:#fff;font-size:15px;font-weight:600;">Os 3 motivos mais comuns:</p>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <tr><td style="padding:8px 0;color:#ccc;font-size:14px;">✓ O PIX expirou (eles duram só 5 min)</td></tr>
+    <tr><td style="padding:8px 0;color:#ccc;font-size:14px;">✓ Erro temporário do banco</td></tr>
+    <tr><td style="padding:8px 0;color:#ccc;font-size:14px;">✓ Conexão caiu no meio</td></tr>
+  </table>
+</td></tr>
+
+<tr><td align="center" style="padding:20px 40px 30px;">
+  <a href="{{ deposit_url }}" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
+    FINALIZAR DEPÓSITO
+  </a>
+  <p style="margin:20px 0 0;color:#888;font-size:13px;">Leva menos de 1 minuto</p>
+</td></tr>
+
+<tr><td align="center" style="padding:20px 40px;border-top:1px solid #2a2a2a;">
+  <p style="margin:0;color:#ccc;font-size:14px;">
+    Travou de novo? Chama a gente: <a href="{{ site_url }}/whatsapp" style="color:#25D366;">WhatsApp</a> ou <a href="{{ support_url }}" style="color:#FFD700;">Chat</a>
+  </p>
+</td></tr>
+
+<tr><td align="center" style="padding:30px 40px;">
+  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.</p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Bônus ativado</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+
+<tr><td align="center" style="padding:50px 40px 30px;background:linear-gradient(135deg,#9333EA 0%,#6D28D9 100%);">
+  <p style="margin:0;font-size:60px;">🎁</p>
+  <h1 style="margin:16px 0 0;color:#fff;font-size:28px;font-weight:800;">Bônus ativado!</h1>
+</td></tr>
+
+<tr><td align="center" style="padding:40px 40px 20px;">
+  <p style="margin:0 0 8px;color:#b0b0b0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Valor do Bônus</p>
+  <p style="margin:0;color:#FFD700;font-size:48px;font-weight:900;">{{ amount|brl }}</p>
+</td></tr>
+
+<tr><td style="padding:20px 40px;">
+  <p style="margin:0 0 20px;color:#fff;font-size:16px;font-weight:600;">Como funciona:</p>
+
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:10px;">
+    <p style="margin:0;color:#ccc;font-size:14px;">✓ <strong style="color:#FFD700;">Rollover {{ rollover|default(35) }}x</strong> — você precisa apostar {{ rollover_total|brl }} para sacar</p>
+  </div>
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:10px;">
+    <p style="margin:0;color:#ccc;font-size:14px;">✓ <strong style="color:#FFD700;">Jogos elegíveis:</strong> Slots, Aviator, Crash, Fortune Tiger</p>
+  </div>
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:10px;">
+    <p style="margin:0;color:#ccc;font-size:14px;">✓ <strong style="color:#FFD700;">Prazo:</strong> {{ valid_days|default(7) }} dias</p>
+  </div>
+  <div style="background:#1a3a1a;border-radius:8px;padding:16px;margin-top:20px;border:1px solid #2d5a2d;">
+    <p style="margin:0;color:#88ff88;font-size:13px;">
+      💡 <strong>Dica de pro:</strong> slots contam 100% no rollover. Cassino ao vivo conta apenas 10%.
+    </p>
+  </div>
+</td></tr>
+
+<tr><td align="center" style="padding:30px 40px;">
+  <a href="{{ site_url }}/jogar" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
+    COMEÇAR A JOGAR COM BÔNUS
+  </a>
+</td></tr>
+
+<tr><td align="center" style="padding:20px 40px 40px;border-top:1px solid #2a2a2a;">
+  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.<br>
+  <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a></p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

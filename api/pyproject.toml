@@ -1,0 +1,75 @@
+[tool.poetry]
+name = "betcrm"
+version = "0.1.0"
+description = "BetCRM - Plataforma de CRM para casas de aposta"
+authors = ["Your Name <you@yourdomain.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+django = "^5.1"
+djangorestframework = "^3.15"
+django-cors-headers = "^4.4"
+django-environ = "^0.11"
+django-filter = "^24.3"
+django-extensions = "^3.2"
+djangorestframework-simplejwt = "^5.3"
+drf-spectacular = "^0.27"
+psycopg = {extras = ["binary"], version = "^3.2"}
+redis = "^5.0"
+celery = "^5.4"
+django-celery-beat = "^2.7"
+django-celery-results = "^2.5"
+flower = "^2.0"
+gunicorn = "^22.0"
+requests = "^2.32"
+jinja2 = "^3.1"
+sentry-sdk = "^2.14"
+python-dateutil = "^2.9"
+phonenumbers = "^8.13"
+bleach = "^6.1"  # sanitização de HTML em templates
+pyhumps = "^3.8"  # snake_case <-> camelCase para API
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.6"
+pytest = "^8.3"
+pytest-django = "^4.9"
+pytest-cov = "^5.0"
+pytest-mock = "^3.14"
+factory-boy = "^3.3"
+watchdog = "^4.0"
+ipython = "^8.27"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# ---------- TOOL CONFIGS ----------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "UP",  # pyupgrade
+    "DJ",  # django
+    "SIM", # simplify
+]
+ignore = ["E501"]  # line too long (handled by formatter)
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "betcrm.settings.dev"
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --reuse-db --cov=apps --cov-report=term-missing"

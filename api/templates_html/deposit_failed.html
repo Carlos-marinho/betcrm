@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Vamos resolver</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+
+<tr><td align="center" style="padding:40px 40px 20px;background:linear-gradient(135deg,#FF6B35 0%,#C73E1D 100%);">
+  <p style="margin:0;font-size:48px;">🔧</p>
+  <h1 style="margin:16px 0 0;color:#fff;font-size:24px;font-weight:700;">Vamos resolver isso juntos</h1>
+</td></tr>
+
+<tr><td style="padding:40px;">
+  <p style="margin:0 0 24px;color:#fff;font-size:16px;line-height:1.5;">
+    Olá {{ first_name }}, seu depósito de <strong style="color:#FFD700;">{{ amount|brl }}</strong> não foi processado.
+  </p>
+  <p style="margin:0 0 16px;color:#ccc;font-size:15px;font-weight:600;">Tente uma dessas soluções:</p>
+
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:12px;border-left:3px solid #FFD700;">
+    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">1. CARTÃO RECUSADO</p>
+    <p style="margin:0;color:#ccc;font-size:14px;">Tente outro método ou PIX (mais rápido)</p>
+  </div>
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:12px;border-left:3px solid #FFD700;">
+    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">2. LIMITE EXCEDIDO</p>
+    <p style="margin:0;color:#ccc;font-size:14px;">Ajuste no app do seu banco e tente novamente</p>
+  </div>
+  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:24px;border-left:3px solid #FFD700;">
+    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">3. PIX EXPIROU</p>
+    <p style="margin:0;color:#ccc;font-size:14px;">Gere um novo código de pagamento</p>
+  </div>
+
+  <div style="text-align:center;">
+    <a href="{{ deposit_url }}" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
+      TENTAR DE NOVO
+    </a>
+  </div>
+</td></tr>
+
+<tr><td align="center" style="padding:24px 40px;border-top:1px solid #2a2a2a;background:#0f0f0f;">
+  <p style="margin:0 0 12px;color:#fff;font-size:15px;">Quer falar com alguém? Resposta em menos de 2 min:</p>
+  <a href="{{ support_url }}" style="display:inline-block;margin:0 6px;padding:12px 24px;background:#252525;color:#FFD700;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">💬 CHAT</a>
+  <a href="{{ site_url }}/whatsapp" style="display:inline-block;margin:0 6px;padding:12px 24px;background:#25D366;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">📱 WHATSAPP</a>
+</td></tr>
+
+<tr><td align="center" style="padding:30px 40px;">
+  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.<br>
+  <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a></p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

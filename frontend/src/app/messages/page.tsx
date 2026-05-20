@@ -1,0 +1,256 @@
+"use client";
+
+import React, { useState } from "react";
+import { DashboardShell } from "@/components/dashboard/shell";
+import { useMessageLogs } from "@/lib/hooks";
+import {
+  Mail, MessageSquare, Bell, MessageCircle,
+  CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
+  Activity, ChevronLeft, ChevronRight,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+const CHANNEL_FILTERS = [
+  { value: "", label: "Todos canais" },
+  { value: "email", label: "Email" },
+  { value: "sms", label: "SMS" },
+  { value: "push", label: "Push" },
+  { value: "whatsapp", label: "WhatsApp" },
+];
+
+const STATUS_FILTERS = [
+  { value: "", label: "Todos status" },
+  { value: "sent", label: "Enviadas" },
+  { value: "delivered", label: "Entregues" },
+  { value: "opened", label: "Abertas" },
+  { value: "clicked", label: "Clicadas" },
+  { value: "bounced", label: "Bounce" },
+  { value: "failed", label: "Falhou" },
+];
+
+const CHANNEL_ICON = {
+  email: Mail,
+  sms: MessageSquare,
+  push: Bell,
+  whatsapp: MessageCircle,
+} as const;
+
+const CHANNEL_BADGE = {
+  email: "badge-gold",
+  sms: "badge-teal",
+  push: "badge-muted",
+  whatsapp: "badge-teal",
+} as const;
+
+const STATUS_CONFIG: Record<string, { badge: string; icon: React.ElementType; label: string }> = {
+  pending:      { badge: "badge-muted",  icon: Clock,             label: "Pendente" },
+  queued:       { badge: "badge-muted",  icon: Clock,             label: "Na fila" },
+  sent:         { badge: "badge-muted",  icon: Activity,          label: "Enviada" },
+  delivered:    { badge: "badge-teal",   icon: CheckCircle2,      label: "Entregue" },
+  opened:       { badge: "badge-gold",   icon: MailOpen,          label: "Aberta" },
+  clicked:      { badge: "badge-gold",   icon: MousePointerClick, label: "Clicada" },
+  bounced:      { badge: "badge-red",    icon: XCircle,           label: "Bounce" },
+  failed:       { badge: "badge-red",    icon: XCircle,           label: "Falhou" },
+  complained:   { badge: "badge-red",    icon: XCircle,           label: "Spam" },
+  unsubscribed: { badge: "badge-muted",  icon: XCircle,           label: "Descadastrado" },
+  rejected:     { badge: "badge-muted",  icon: XCircle,           label: "Rejeitada" },
+};
+
+const STAT_CARDS = [
+  { label: "Enviadas hoje", icon: Activity, value: "—", accent: "text-muted-foreground" },
+  { label: "Entregues", icon: CheckCircle2, value: "—", accent: "text-teal" },
+  { label: "Abertas", icon: MailOpen, value: "—", accent: "text-gold" },
+  { label: "Clicadas", icon: MousePointerClick, value: "—", accent: "text-gold" },
+];
+
+export default function MessagesPage() {
+  const [channelFilter, setChannelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading } = useMessageLogs({
+    channel: channelFilter || undefined,
+    status: statusFilter || undefined,
+    page,
+  });
+
+  const totalPages = data ? Math.ceil(data.count / 20) : 1;
+
+  return (
+    <DashboardShell>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="font-display font-bold text-2xl">Mensagens</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {data ? `${data.count.toLocaleString("pt-BR")} mensagens no período` : "Carregando..."}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-teal">
+            <span className="live-dot" />
+            atualiza a cada 30s
+          </div>
+        </div>
+
+        {/* Stats strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {STAT_CARDS.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div key={stat.label} className="card-vault p-4 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                  <Icon className={`w-4 h-4 ${stat.accent}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="font-data text-lg font-semibold text-foreground">{stat.value}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+            {CHANNEL_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => { setChannelFilter(f.value); setPage(1); }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  channelFilter === f.value
+                    ? "bg-gold/10 text-gold border border-gold/20"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => { setStatusFilter(f.value); setPage(1); }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  statusFilter === f.value
+                    ? "bg-gold/10 text-gold border border-gold/20"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="card-vault overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Canal</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Usuário</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Template</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Assunto</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Enviada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && Array.from({ length: 10 }).map((_, i) => (
+                  <tr key={i} className="border-b border-border/50">
+                    <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-24 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-28 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-40 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-20 shimmer-bg rounded" /></td>
+                  </tr>
+                ))}
+
+                {!isLoading && data?.results.map((msg) => {
+                  const ChanIcon = CHANNEL_ICON[msg.channel] ?? Mail;
+                  const chanBadge = CHANNEL_BADGE[msg.channel] ?? "badge-muted";
+                  const statusCfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.sent;
+
+                  return (
+                    <tr key={msg.id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3">
+                        <span className={chanBadge}>
+                          <ChanIcon className="w-3 h-3" />
+                          {msg.channel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-data text-xs text-muted-foreground">{msg.profile_external_id}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {msg.template_code
+                          ? <span className="font-data text-xs text-foreground">{msg.template_code}</span>
+                          : <span className="text-muted-foreground/30">—</span>
+                        }
+                      </td>
+                      <td className="px-4 py-3 max-w-[200px]">
+                        <span className="text-xs text-muted-foreground truncate block">
+                          {msg.subject || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={statusCfg.badge}>{statusCfg.label}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-muted-foreground">
+                          {msg.sent_at
+                            ? formatDistanceToNow(new Date(msg.sent_at), { locale: ptBR, addSuffix: true })
+                            : "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!isLoading && data?.results.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-16 text-center">
+                      <Mail className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Nenhuma mensagem encontrada para este filtro.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {data && data.count > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <p className="text-xs text-muted-foreground font-data">
+                Página {page} de {totalPages} · {data.count.toLocaleString("pt-BR")} total
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="p-1.5 rounded hover:bg-white/5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="p-1.5 rounded hover:bg-white/5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </DashboardShell>
+  );
+}

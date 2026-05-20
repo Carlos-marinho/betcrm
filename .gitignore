@@ -1,0 +1,90 @@
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+*.pem
+*.key
+!signing.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Django
+*.log
+*.pot
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Node
+node_modules/
+.next/
+out/
+.vercel
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+.claude/settings.local.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# Docker
+docker-compose.override.yml
+
+# Backups
+*.sql.gz
+*.tar.gz
+/opt/backups/
+infra/nginx/certs/
+
+# Secrets
+secrets/
+postal/config/postal.yml
+postal/config/signing.key
+
+# Logs
+logs/
+*.log
+
+# Local exports
+docs/*.csv

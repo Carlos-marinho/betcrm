@@ -1,0 +1,210 @@
+"""
+Template Service: renderização segura via Jinja2 sandbox.
+
+Suporta:
+- Variáveis do profile (first_name, ltv, etc)
+- Context extra (do fluxo / evento)
+- Filtros customizados (formato BRL, datas BR)
+- A/B testing automático
+- Link de unsubscribe automático
+"""
+
+import logging
+import random
+import re
+from decimal import Decimal
+
+from django.conf import settings
+from jinja2 import StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
+
+from apps.messaging.providers import MessageContent
+
+from .models import AbTest, MessageTemplate
+
+logger = logging.getLogger(__name__)
+
+
+def format_brl(value) -> str:
+    """Formata valor como Real brasileiro."""
+    if value is None:
+        return "R$ 0,00"
+    try:
+        v = Decimal(str(value))
+        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return f"R$ {value}"
+
+
+def format_date_br(value) -> str:
+    """Formata data como dd/mm/aaaa."""
+    if not value:
+        return ""
+    try:
+        return value.strftime("%d/%m/%Y")
+    except Exception:
+        return str(value)
+
+
+def format_phone_br(value: str) -> str:
+    """Formata telefone como (11) 99999-9999."""
+    if not value:
+        return ""
+    digits = re.sub(r"\D", "", str(value))
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return value
+
+
+class TemplateService:
+    """Serviço estático de renderização de templates."""
+
+    _env: SandboxedEnvironment | None = None
+
+    @classmethod
+    def get_env(cls) -> SandboxedEnvironment:
+        """Singleton do environment Jinja2."""
+        if cls._env is None:
+            env = SandboxedEnvironment(
+                autoescape=True,
+                # NÃO usar StrictUndefined: queremos {{ var_inexistente }} virar ""
+                # para não quebrar render em produção
+            )
+            env.filters["brl"] = format_brl
+            env.filters["date_br"] = format_date_br
+            env.filters["phone_br"] = format_phone_br
+            cls._env = env
+        return cls._env
+
+    @classmethod
+    def render(
+        cls,
+        template_code: str,
+        profile,
+        channel: str,
+        extra_context: dict | None = None,
+    ) -> MessageContent:
+        """
+        Renderiza um template para um profile.
+
+        Retorna MessageContent pronto para envio.
+        """
+        # Resolve template: pode ser um A/B test
+        template = cls._resolve_template(template_code, profile)
+
+        # Monta contexto
+        context = cls._build_context(profile, extra_context)
+
+        env = cls.get_env()
+
+        content = MessageContent(
+            template_code=template.code,
+            profile_id=profile.id,
+        )
+
+        if channel == "email":
+            content.subject = env.from_string(template.subject or "").render(**context)
+            content.html = env.from_string(template.html_body or "").render(**context)
+            content.text = env.from_string(template.text_body or "").render(**context)
+            content.from_email = template.from_email or ""
+            content.from_name = template.from_name or ""
+
+            # Injeta unsubscribe se template marketing
+            if template.include_unsubscribe and template.category == "marketing":
+                unsub_url = cls._build_unsubscribe_url(profile)
+                if "{{ unsubscribe_url }}" not in template.html_body:
+                    content.html = cls._inject_unsubscribe_footer(content.html, unsub_url)
+
+        else:  # sms, push, whatsapp
+            content.body = env.from_string(template.body or "").render(**context)
+
+        return content
+
+    @classmethod
+    def _resolve_template(cls, template_code: str, profile) -> MessageTemplate:
+        """Resolve template — pode trocar por variante se houver A/B ativo."""
+        try:
+            template = MessageTemplate.objects.get(code=template_code, is_active=True)
+        except MessageTemplate.DoesNotExist as e:
+            raise ValueError(f"Template '{template_code}' não encontrado ou inativo") from e
+
+        # Verifica se há A/B test ativo usando esse template
+        ab_test = (
+            AbTest.objects.filter(
+                is_active=True,
+                variants__template=template,
+            )
+            .prefetch_related("variants__template")
+            .first()
+        )
+
+        if ab_test:
+            variants = list(ab_test.variants.all())
+            if variants:
+                # Sorteio ponderado consistente por profile (sticky)
+                # Garante que o mesmo usuário sempre cai na mesma variante
+                seed = hash((profile.id, ab_test.id))
+                rng = random.Random(seed)
+                choice = rng.choices(
+                    population=[v.template for v in variants],
+                    weights=[v.weight for v in variants],
+                    k=1,
+                )[0]
+                return choice
+
+        return template
+
+    @classmethod
+    def _build_context(cls, profile, extra: dict | None) -> dict:
+        """Monta o contexto de variáveis disponíveis para o template."""
+        return {
+            # Profile básico
+            "first_name": profile.first_name or "jogador",
+            "last_name": profile.last_name or "",
+            "email": profile.email or "",
+            "phone": profile.phone or "",
+            # Comportamento
+            "total_deposits": profile.total_deposits,
+            "deposit_count": profile.deposit_count,
+            "ltv": profile.ltv,
+            "favorite_game": profile.favorite_game or "Aviator",
+            # Tags / atributos
+            "tags": profile.tags or [],
+            "is_vip": any(t.startswith("VIP_") for t in (profile.tags or [])),
+            "is_ftd": profile.has_tag("FTD"),
+            # URLs úteis
+            "site_url": getattr(settings, "PUBLIC_SITE_URL", "https://yourdomain.com"),
+            "deposit_url": getattr(settings, "DEPOSIT_URL", "https://yourdomain.com/depositar"),
+            "support_url": getattr(settings, "SUPPORT_URL", "https://yourdomain.com/suporte"),
+            "unsubscribe_url": cls._build_unsubscribe_url(profile),
+            # Extra (do fluxo / evento)
+            **(extra or {}),
+        }
+
+    @classmethod
+    def _build_unsubscribe_url(cls, profile) -> str:
+        """Constrói URL única de unsubscribe para o profile."""
+        import hashlib
+
+        # Token determinístico (mesmo que isso = mesmo unsub link sempre)
+        token = hashlib.sha256(
+            f"{profile.external_id}{settings.SECRET_KEY}".encode()
+        ).hexdigest()[:32]
+
+        base = settings.DEFAULT_UNSUBSCRIBE_URL if hasattr(settings, "DEFAULT_UNSUBSCRIBE_URL") else "https://yourdomain.com/unsubscribe"
+        return f"{base}?token={token}&id={profile.external_id}"
+
+    @classmethod
+    def _inject_unsubscribe_footer(cls, html: str, unsub_url: str) -> str:
+        """Injeta footer de unsubscribe se não existir."""
+        footer = f"""
+<div style="text-align:center; padding:20px; font-size:11px; color:#666;">
+    <a href="{unsub_url}" style="color:#888;">Cancelar inscrição</a> |
+    Jogue com responsabilidade. +18.
+</div>
+"""
+        if "</body>" in html:
+            return html.replace("</body>", footer + "</body>")
+        return html + footer

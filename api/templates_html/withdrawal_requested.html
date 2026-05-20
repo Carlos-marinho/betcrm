@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Pedido de saque</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;">
+
+<tr><td align="center" style="padding:50px 40px 30px;">
+  <p style="margin:0;font-size:50px;">📋</p>
+  <h1 style="margin:20px 0 12px;color:#fff;font-size:26px;font-weight:700;">Recebemos seu pedido</h1>
+  <p style="margin:0;color:#b0b0b0;font-size:16px;">Já estamos processando.</p>
+</td></tr>
+
+<tr><td style="padding:0 40px 30px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#252525;border-radius:12px;">
+    <tr><td style="padding:24px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="padding:8px 0;color:#888;font-size:13px;">Valor solicitado</td>
+          <td style="padding:8px 0;color:#FFD700;font-size:20px;font-weight:700;text-align:right;">{{ amount|brl }}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#888;font-size:13px;border-top:1px solid #333;">Método</td>
+          <td style="padding:8px 0;color:#fff;font-size:14px;text-align:right;border-top:1px solid #333;">{{ method|default('PIX') }}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#888;font-size:13px;border-top:1px solid #333;">Status</td>
+          <td style="padding:8px 0;color:#FFA500;font-size:14px;font-weight:600;text-align:right;border-top:1px solid #333;">⏳ Em análise</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#888;font-size:13px;border-top:1px solid #333;">Prazo estimado</td>
+          <td style="padding:8px 0;color:#fff;font-size:14px;text-align:right;border-top:1px solid #333;">até 30 min</td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</td></tr>
+
+<tr><td align="center" style="padding:0 40px 30px;">
+  <p style="margin:0;color:#ccc;font-size:14px;line-height:1.5;">
+    Você vai receber outro email assim que o saque for aprovado e enviado.
+  </p>
+</td></tr>
+
+<tr><td align="center" style="padding:30px 40px;border-top:1px solid #2a2a2a;">
+  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.</p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

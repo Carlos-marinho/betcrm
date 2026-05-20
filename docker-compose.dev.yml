@@ -1,0 +1,59 @@
+name: betcrm
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"  # expor pra dev local
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      DJANGO_SETTINGS_MODULE: betcrm.settings.dev
+      DJANGO_DEBUG: "True"
+    volumes:
+      - ./api:/app  # hot reload
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+
+  celery_worker:
+    command: >
+      celery -A betcrm worker
+      -l debug
+      -Q default,events,messaging,flows
+      --concurrency=2
+    volumes:
+      - ./api:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: betcrm.settings.dev
+
+  celery_beat:
+    volumes:
+      - ./api:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: betcrm.settings.dev
+
+  flower:
+    ports:
+      - "5555:5555"
+
+  frontend:
+    command: npm run dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+
+  nginx:
+    profiles:
+      - donotstart  # nginx não roda em dev

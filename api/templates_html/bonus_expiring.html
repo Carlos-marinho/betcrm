@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Bônus expirando</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<tr><td align="center" style="padding:40px 20px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+
+<tr><td align="center" style="padding:50px 40px 30px;background:linear-gradient(135deg,#FF6B35 0%,#C73E1D 100%);">
+  <p style="margin:0;font-size:60px;">⏰</p>
+  <h1 style="margin:20px 0 8px;color:#fff;font-size:26px;font-weight:800;">Seu bônus está acabando!</h1>
+  <p style="margin:0;color:rgba(255,255,255,0.95);font-size:16px;">Expira em <strong>{{ hours_remaining|default(24) }}h</strong></p>
+</td></tr>
+
+<tr><td align="center" style="padding:40px;">
+  <p style="margin:0 0 8px;color:#b0b0b0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Você ainda tem</p>
+  <p style="margin:0;color:#FFD700;font-size:42px;font-weight:900;">{{ amount|brl }}</p>
+  <p style="margin:12px 0 0;color:#ccc;font-size:14px;">em bônus para usar antes que expire</p>
+</td></tr>
+
+<tr><td align="center" style="padding:0 40px 30px;">
+  <a href="{{ site_url }}/jogar" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;text-transform:uppercase;">
+    USAR MEU BÔNUS AGORA
+  </a>
+</td></tr>
+
+<tr><td style="padding:0 40px 30px;">
+  <div style="background:#252525;border-radius:8px;padding:20px;border-left:3px solid #FFD700;">
+    <p style="margin:0;color:#ccc;font-size:14px;line-height:1.5;">
+      🎯 <strong style="color:#FFD700;">Dica:</strong> joga em slots para maximizar suas chances de completar o rollover antes do prazo.
+    </p>
+  </div>
+</td></tr>
+
+<tr><td align="center" style="padding:20px 40px 40px;border-top:1px solid #2a2a2a;">
+  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.<br>
+  <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a></p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
