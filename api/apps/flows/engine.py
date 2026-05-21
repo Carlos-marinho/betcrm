@@ -53,6 +53,7 @@ Estrutura da definição:
 import logging
 from datetime import timedelta
 
+import requests as http_client
 from django.utils import timezone
 
 from .models import FlowExecution
@@ -124,6 +125,7 @@ class FlowEngine:
             "add_tag": cls._handle_add_tag,
             "remove_tag": cls._handle_remove_tag,
             "wait_until_event": cls._handle_wait_until_event,
+            "http_request": cls._handle_http_request,
             "exit": cls._handle_exit,
         }
         handler = handlers.get(node_type)
@@ -243,23 +245,122 @@ class FlowEngine:
     def _handle_wait_until_event(cls, execution, node) -> NodeProcessResult:
         """
         Espera até um evento específico OU timeout.
-        Estratégia: agenda check periódico no contexto.
 
-        Quando o evento chega via evaluate_flow_triggers, ele acelera a execução.
+        O nó permanece como current_node_id enquanto aguarda — isso garante
+        que mudanças na definição do fluxo durante a espera sejam respeitadas.
+
+        Fluxo de estados:
+        1. Primeira vez: inicializa _wait_started_at + _waiting_for_event, fica no nó
+        2. Evento chega: evaluate_flow_triggers apaga _waiting_for_event → procede via "next"
+        3. Timeout: _wait_started_at + timeout_hours <= now → procede via "next_timeout"
+        4. Re-check periódico: ainda aguardando → fica no nó, re-agenda
         """
         config = node.get("config", {})
         timeout_hours = config.get("timeout_hours", 72)
-
-        # Marca o que está esperando no contexto
         waiting_for = config.get("event_code", "")
-        execution.context["_waiting_for_event"] = waiting_for
-        execution.context["_wait_started_at"] = timezone.now().isoformat()
+        node_id = node["id"]
 
-        # Agenda re-check (timeout)
+        is_initialized = "_wait_started_at" in execution.context
+
+        # Caso 2: evento recebido — evaluate_flow_triggers limpou _waiting_for_event
+        if is_initialized and "_waiting_for_event" not in execution.context:
+            execution.context.pop("_wait_started_at", None)
+            return NodeProcessResult(next_node_id=node.get("next", node.get("next_timeout", "exit")))
+
+        # Caso 3/4: já inicializado e ainda aguardando
+        if is_initialized:
+            try:
+                from datetime import datetime
+                started_str = execution.context["_wait_started_at"]
+                started = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                if timezone.now() >= started + timedelta(hours=timeout_hours):
+                    # Timeout atingido — limpa estado e avança via next_timeout
+                    execution.context.pop("_waiting_for_event", None)
+                    execution.context.pop("_wait_started_at", None)
+                    return NodeProcessResult(next_node_id=node.get("next_timeout", "exit"))
+            except Exception:
+                pass
+            # Ainda dentro do timeout — fica no nó e re-agenda check
+            return NodeProcessResult(
+                next_node_id=node_id,
+                next_run_at=timezone.now() + timedelta(hours=min(timeout_hours, 1)),
+            )
+
+        # Caso 1: primeira vez — inicializa estado de espera
         return NodeProcessResult(
-            next_node_id=node.get("next_timeout", "exit"),
+            next_node_id=node_id,
             next_run_at=timezone.now() + timedelta(hours=timeout_hours),
-            context_updates={"_waiting_for_event": waiting_for},
+            context_updates={
+                "_waiting_for_event": waiting_for,
+                "_wait_started_at": timezone.now().isoformat(),
+            },
+        )
+
+    @classmethod
+    def _handle_http_request(cls, execution, node) -> NodeProcessResult:
+        """
+        Faz um POST para um webhook externo (ex: FlowLab).
+
+        config esperado:
+        {
+            "url": "https://...",
+            "profile_fields": ["external_id", "email", "phone"],  # campos do perfil a incluir
+            "extra_payload": {"chave": "valor", ...}              # payload livre adicional
+        }
+        """
+        from apps.profiles.models import Profile
+
+        config = node.get("config", {})
+        url = config.get("url", "").strip()
+        if not url:
+            logger.warning("http_request node has no URL configured — skipping")
+            return NodeProcessResult(next_node_id=node.get("next", "exit"))
+
+        payload: dict = {}
+
+        # Campos fixos do perfil (opcionais, selecionados pelo usuário)
+        profile_fields = config.get("profile_fields", [])
+        if profile_fields:
+            try:
+                profile = Profile.objects.get(id=execution.profile_id)
+                for field in profile_fields:
+                    value = getattr(profile, field, None)
+                    if value is not None:
+                        # Serializa Decimal e datetime para tipos JSON-safe
+                        if hasattr(value, "isoformat"):
+                            payload[field] = value.isoformat()
+                        else:
+                            payload[field] = str(value) if not isinstance(value, (bool, int, float, list, dict)) else value
+            except Profile.DoesNotExist:
+                logger.error("Profile %s not found for http_request node", execution.profile_id)
+
+        # Payload extra livre definido no nó
+        extra = config.get("extra_payload", {})
+        if isinstance(extra, dict):
+            payload.update(extra)
+
+        # Contexto de execução disponível para o receiver identificar a origem
+        payload["_betcrm_flow"] = execution.flow.code
+        payload["_betcrm_execution"] = execution.id
+
+        try:
+            resp = http_client.post(url, json=payload, timeout=10)
+            resp.raise_for_status()
+            logger.info(
+                "http_request OK: flow=%s node=%s status=%s",
+                execution.flow.code, node.get("id"), resp.status_code,
+            )
+        except http_client.exceptions.RequestException as exc:
+            # Loga mas não falha o fluxo — apenas registra no contexto
+            logger.error("http_request failed: flow=%s node=%s err=%s", execution.flow.code, node.get("id"), exc)
+            return NodeProcessResult(
+                next_node_id=node.get("next", "exit"),
+                context_updates={"_http_request_error": str(exc)[:500]},
+            )
+
+        return NodeProcessResult(
+            next_node_id=node.get("next", "exit"),
+            context_updates={"_http_request_status": resp.status_code},
         )
 
     @classmethod

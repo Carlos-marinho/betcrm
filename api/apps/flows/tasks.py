@@ -91,12 +91,27 @@ def evaluate_flow_triggers(event_id: int, profile_id: int):
     for flow in triggered_flows:
         _try_enroll(flow, profile_id, event.id)
 
+    # 3. Acelerar execuções aguardando este evento (wait_until_event) — antes de goal_reached
+    waiting = FlowExecution.objects.filter(
+        profile_id=profile_id,
+        state="active",
+        context___waiting_for_event=event_code,
+    )
+    waiting_ids = set()
+    for execution in waiting:
+        waiting_ids.add(execution.id)
+        execution.next_run_at = timezone.now()
+        execution.context.pop("_waiting_for_event", None)
+        execution.save(update_fields=["next_run_at", "context"])
+
     # 2. Checar goal_reached nas execuções ativas do profile
+    # Pula execuções que estão em wait_until_event para este evento — elas vão
+    # continuar naturalmente pelo caminho "next" e sair via completed.
     active_executions = FlowExecution.objects.filter(
         profile_id=profile_id,
         state="active",
         flow__goal_event_code=event_code,
-    ).select_related("flow")
+    ).exclude(id__in=waiting_ids).select_related("flow")
 
     for execution in active_executions:
         execution.state = "goal_reached"
@@ -105,18 +120,6 @@ def evaluate_flow_triggers(event_id: int, profile_id: int):
 
         execution.flow.total_goal_reached = (execution.flow.total_goal_reached or 0) + 1
         execution.flow.save(update_fields=["total_goal_reached"])
-
-    # 3. Acelerar execuções aguardando este evento (wait_until_event)
-    waiting = FlowExecution.objects.filter(
-        profile_id=profile_id,
-        state="active",
-        context___waiting_for_event=event_code,
-    )
-    for execution in waiting:
-        # Marca para processar agora (handler escolherá next_success)
-        execution.next_run_at = timezone.now()
-        execution.context.pop("_waiting_for_event", None)
-        execution.save(update_fields=["next_run_at", "context"])
 
 
 @shared_task(time_limit=300)
