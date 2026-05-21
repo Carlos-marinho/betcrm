@@ -35,8 +35,9 @@ export function FlowCanvas({
   onSelectNode,
 }: FlowCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const hasCenteredRef = useRef(false);
   const [pan, setPan] = useState({ x: 120, y: 60 });
-  const [zoom, setZoom] = useState(0.9);
+  const [zoom, setZoom] = useState(1.1);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -135,26 +136,28 @@ export function FlowCanvas({
     setDraggingId(null);
   }, []);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Non-passive wheel listener so preventDefault() actually blocks browser zoom
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
+      const rect = el.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       const delta = e.deltaY > 0 ? 0.92 : 1.08;
-      const newZoom = Math.max(0.25, Math.min(2.5, zoom * delta));
-
-      // Zoom toward mouse cursor
-      setPan((p) => ({
-        x: mouseX - (mouseX - p.x) * (newZoom / zoom),
-        y: mouseY - (mouseY - p.y) * (newZoom / zoom),
-      }));
-      setZoom(newZoom);
-    },
-    [zoom]
-  );
+      setZoom((z) => {
+        const newZoom = Math.max(0.25, Math.min(2.5, z * delta));
+        setPan((p) => ({
+          x: mouseX - (mouseX - p.x) * (newZoom / z),
+          y: mouseY - (mouseY - p.y) * (newZoom / z),
+        }));
+        return newZoom;
+      });
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
 
   const handleNodeDragStart = useCallback(
     (nodeId: string, e: React.MouseEvent) => {
@@ -275,6 +278,34 @@ export function FlowCanvas({
     [nodes, connections, selectedNodeId, onNodesChange, onConnectionsChange, onSelectNode]
   );
 
+  const fitView = useCallback(() => {
+    if (!containerRef.current) return;
+    if (nodes.length === 0) {
+      setPan({ x: 120, y: 60 });
+      setZoom(1.1);
+      return;
+    }
+    const targetZoom = 1.15;
+    const minX = Math.min(...nodes.map((n) => n.position.x));
+    const maxX = Math.max(...nodes.map((n) => n.position.x + NODE_WIDTH));
+    const minY = Math.min(...nodes.map((n) => n.position.y));
+    const maxY = Math.max(...nodes.map((n) => n.position.y + (NODE_HEIGHTS[n.type] ?? 76)));
+    const containerW = containerRef.current.clientWidth;
+    const containerH = containerRef.current.clientHeight;
+    const panX = (containerW - (maxX - minX) * targetZoom) / 2 - minX * targetZoom;
+    const panY = Math.max(60, (containerH - (maxY - minY) * targetZoom) / 2 - minY * targetZoom);
+    setZoom(targetZoom);
+    setPan({ x: panX, y: panY });
+  }, [nodes]);
+
+  // Auto-center on first node load
+  useEffect(() => {
+    if (nodes.length > 0 && !hasCenteredRef.current) {
+      hasCenteredRef.current = true;
+      fitView();
+    }
+  }, [nodes, fitView]);
+
   const connectingNode = connectingFrom
     ? nodes.find((n) => n.id === connectingFrom.nodeId)
     : null;
@@ -298,13 +329,12 @@ export function FlowCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
       >
         {/* Grid dots background */}
         <div
           className="canvas-surface absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)`,
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.09) 1px, transparent 1px)`,
             backgroundSize: `${28 * zoom}px ${28 * zoom}px`,
             backgroundPosition: `${pan.x}px ${pan.y}px`,
           }}
@@ -426,10 +456,7 @@ export function FlowCanvas({
             +
           </button>
           <button
-            onClick={() => {
-              setPan({ x: 120, y: 60 });
-              setZoom(0.9);
-            }}
+            onClick={fitView}
             className="ml-1 h-7 px-2 rounded-lg text-[10px] transition-colors"
             style={{
               background: "rgba(255,255,255,0.06)",
@@ -437,7 +464,7 @@ export function FlowCanvas({
               color: "rgba(255,255,255,0.3)",
             }}
           >
-            Reset
+            Encaixar
           </button>
         </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { X, Info } from "lucide-react";
+import React, { useState } from "react";
+import { X, Info, Plus, Trash2 } from "lucide-react";
 import { FlowNode, NODE_META } from "./types";
 
 const TRIGGER_EVENTS = [
@@ -43,6 +43,29 @@ const CHANNELS = [
   { value: "sms", label: "SMS" },
   { value: "push", label: "Push Notification" },
   { value: "whatsapp", label: "WhatsApp" },
+];
+
+const PROFILE_FIELD_OPTIONS = [
+  { value: "external_id", label: "ID externo" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Telefone" },
+  { value: "first_name", label: "Nome" },
+  { value: "last_name", label: "Sobrenome" },
+  { value: "document", label: "CPF/Documento" },
+  { value: "country", label: "País" },
+  { value: "state", label: "Estado" },
+  { value: "city", label: "Cidade" },
+  { value: "deposit_count", label: "Qtd. depósitos" },
+  { value: "total_deposits", label: "Total depositado" },
+  { value: "ltv", label: "LTV" },
+  { value: "tags", label: "Tags" },
+  { value: "favorite_game", label: "Jogo favorito" },
+  { value: "registered_at", label: "Cadastrou em" },
+  { value: "last_deposit_at", label: "Último depósito em" },
+  { value: "last_login_at", label: "Último login em" },
+  { value: "ftd_at", label: "FTD em" },
+  { value: "is_active", label: "Ativo" },
+  { value: "is_verified", label: "Verificado" },
 ];
 
 interface NodeConfigPanelProps {
@@ -287,6 +310,10 @@ export function NodeConfigPanel({ node, onChange, onClose }: NodeConfigPanelProp
           </>
         )}
 
+        {node.type === "http_request" && (
+          <HttpRequestConfig node={node} set={set} />
+        )}
+
         {node.type === "exit" && (
           <div
             className="rounded-lg p-4 text-center"
@@ -301,6 +328,175 @@ export function NodeConfigPanel({ node, onChange, onClose }: NodeConfigPanelProp
     </div>
   );
 }
+
+// ── HTTP Request node config ──────────────────────────────────────────────────
+
+function HttpRequestConfig({
+  node,
+  set,
+}: {
+  node: FlowNode;
+  set: (key: string, value: unknown) => void;
+}) {
+  const profileFields: string[] = Array.isArray(node.config.profile_fields)
+    ? (node.config.profile_fields as string[])
+    : [];
+
+  const extraPayload: Record<string, string> =
+    node.config.extra_payload && typeof node.config.extra_payload === "object"
+      ? (node.config.extra_payload as Record<string, string>)
+      : {};
+
+  const [newKey, setNewKey] = useState("");
+  const [newVal, setNewVal] = useState("");
+
+  function toggleField(field: string) {
+    const next = profileFields.includes(field)
+      ? profileFields.filter((f) => f !== field)
+      : [...profileFields, field];
+    set("profile_fields", next);
+  }
+
+  function addExtra() {
+    const k = newKey.trim();
+    const v = newVal.trim();
+    if (!k) return;
+    set("extra_payload", { ...extraPayload, [k]: v });
+    setNewKey("");
+    setNewVal("");
+  }
+
+  function removeExtra(key: string) {
+    const next = { ...extraPayload };
+    delete next[key];
+    set("extra_payload", next);
+  }
+
+  return (
+    <>
+      <Field label="URL do Webhook (FlowLab)">
+        <ConfigInput
+          value={String(node.config.url ?? "")}
+          onChange={(v) => set("url", v)}
+          placeholder="https://flowlab.io/webhook/..."
+          mono
+        />
+        <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.2)" }}>
+          Método POST. Será chamado quando o fluxo atingir este nó.
+        </p>
+      </Field>
+
+      <Field label="Campos do perfil no payload">
+        <div className="space-y-1.5 mt-0.5">
+          {PROFILE_FIELD_OPTIONS.map((opt) => {
+            const checked = profileFields.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2.5 cursor-pointer group"
+              >
+                <CheckboxInput
+                  checked={checked}
+                  onChange={() => toggleField(opt.value)}
+                />
+                <span
+                  className="text-xs"
+                  style={{ color: checked ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.4)" }}
+                >
+                  {opt.label}
+                </span>
+                <span
+                  className="text-[9px] font-mono ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ color: "rgba(255,255,255,0.2)" }}
+                >
+                  {opt.value}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="text-[10px] mt-2" style={{ color: "rgba(255,255,255,0.2)" }}>
+          Campos marcados serão enviados no body JSON do POST.
+        </p>
+      </Field>
+
+      <Field label="Payload extra (livre)">
+        {Object.entries(extraPayload).length > 0 && (
+          <div className="space-y-1.5 mb-2">
+            {Object.entries(extraPayload).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1.5">
+                <span
+                  className="flex-1 rounded px-2 py-1 text-[10px] font-mono truncate"
+                  style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)" }}
+                >
+                  {k}: {v}
+                </span>
+                <button
+                  onClick={() => removeExtra(k)}
+                  className="shrink-0 p-1 rounded transition-colors"
+                  style={{ color: "rgba(239,68,68,0.5)" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#EF4444")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(239,68,68,0.5)")}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <input
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="chave"
+            className="flex-1 rounded-lg px-2 py-1.5 text-[10px] font-mono outline-none"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.8)",
+              minWidth: 0,
+            }}
+            onKeyDown={(e) => e.key === "Enter" && addExtra()}
+          />
+          <input
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value)}
+            placeholder="valor"
+            className="flex-1 rounded-lg px-2 py-1.5 text-[10px] outline-none"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.8)",
+              minWidth: 0,
+            }}
+            onKeyDown={(e) => e.key === "Enter" && addExtra()}
+          />
+          <button
+            onClick={addExtra}
+            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+            style={{
+              background: "rgba(168,85,247,0.15)",
+              border: "1px solid rgba(168,85,247,0.2)",
+              color: "#A855F7",
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <p className="text-[10px] mt-1.5" style={{ color: "rgba(255,255,255,0.2)" }}>
+          Pares chave/valor adicionais incluídos no POST. Pressione Enter para adicionar.
+        </p>
+      </Field>
+
+      <Callout>
+        <p>O payload sempre inclui <span style={{ color: "rgba(168,85,247,0.9)" }}>_betcrm_flow</span> e <span style={{ color: "rgba(168,85,247,0.9)" }}>_betcrm_execution</span> para rastreabilidade.</p>
+        <p>Erros HTTP não interrompem o fluxo — são registrados no contexto e a execução continua.</p>
+      </Callout>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

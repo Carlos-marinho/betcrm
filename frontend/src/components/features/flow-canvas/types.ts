@@ -6,6 +6,7 @@ export type NodeType =
   | "add_tag"
   | "remove_tag"
   | "wait_until_event"
+  | "http_request"
   | "exit";
 
 export type ConnectionPort = "next" | "next_true" | "next_false" | "next_timeout";
@@ -55,6 +56,7 @@ export const NODE_HEIGHTS: Record<NodeType, number> = {
   add_tag: 84,
   remove_tag: 84,
   wait_until_event: 104,
+  http_request: 112,
 };
 
 export const NODE_META: Record<
@@ -103,6 +105,12 @@ export const NODE_META: Record<
     darkBg: "rgba(249, 115, 22, 0.08)",
     description: "Espera evento específico com timeout",
   },
+  http_request: {
+    label: "Chamar Webhook",
+    color: "#A855F7",
+    darkBg: "rgba(168, 85, 247, 0.08)",
+    description: "Dispara POST para URL externa (FlowLab ou webhook)",
+  },
   exit: {
     label: "Finalizar",
     color: "#6B7280",
@@ -118,6 +126,7 @@ export const NODE_OUTPUT_PORTS: Record<NodeType, ConnectionPort[]> = {
   send_message: ["next"],
   add_tag: ["next"],
   remove_tag: ["next"],
+  http_request: ["next"],
   condition: ["next_true", "next_false"],
   wait_until_event: ["next", "next_timeout"],
   exit: [],
@@ -250,7 +259,7 @@ export function getOutputPortPos(
   node: FlowNode,
   port: ConnectionPort
 ): { x: number; y: number } {
-  const h = NODE_HEIGHTS[node.type];
+  const h = NODE_HEIGHTS[node.type] ?? 76;
   const w = NODE_WIDTH;
   const { x, y } = node.position;
 

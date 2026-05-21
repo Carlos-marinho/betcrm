@@ -6,9 +6,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-onest)", "system-ui", "sans-serif"],
+        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-syne)", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "Fira Code", "monospace"],
+        mono: ["var(--font-geist-mono)", "monospace"],
       },
       colors: {
         background: "hsl(var(--background))",

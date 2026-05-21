@@ -39,6 +39,7 @@ export function Connections({
 
         const from = getOutputPortPos(fromNode, conn.fromPort);
         const to = getInputPortPos(toNode);
+        if (!isFinite(from.x) || !isFinite(from.y) || !isFinite(to.x) || !isFinite(to.y)) return null;
         const d = bezierPath(from.x, from.y, to.x, to.y);
         const stroke = PORT_STROKE[conn.fromPort] ?? PORT_STROKE.next;
 

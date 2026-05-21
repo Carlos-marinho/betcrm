@@ -9,6 +9,7 @@ import {
   Tag,
   XCircle,
   Timer,
+  Webhook,
   LogOut,
   Trash2,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const ICONS: Record<NodeType, React.FC<{ className?: string; style?: React.CSSPr
   add_tag: Tag,
   remove_tag: XCircle,
   wait_until_event: Timer,
+  http_request: Webhook,
   exit: LogOut,
 };
 
@@ -137,17 +139,17 @@ export function FlowNodeCard({
               ? meta.color
               : isTarget
               ? "#F0A500"
-              : "rgba(255,255,255,0.08)"
+              : "rgba(255,255,255,0.13)"
           }`,
-          background: `linear-gradient(145deg, ${meta.darkBg} 0%, rgba(12,16,32,0.97) 100%)`,
+          background: `linear-gradient(160deg, ${meta.darkBg} 0%, rgba(20,28,54,0.98) 100%)`,
           overflow: "hidden",
           cursor: isConnectingMode ? (isTarget ? "crosshair" : "default") : "grab",
           userSelect: "none",
           boxShadow: isSelected
-            ? `0 0 0 1px ${meta.color}40, 0 8px 24px rgba(0,0,0,0.4)`
+            ? `0 0 0 1px ${meta.color}55, 0 0 28px ${meta.color}1E, 0 12px 40px rgba(0,0,0,0.7)`
             : isTarget
-            ? "0 0 16px rgba(240,165,0,0.25)"
-            : "0 4px 16px rgba(0,0,0,0.3)",
+            ? "0 0 0 1.5px #F0A500, 0 0 20px rgba(240,165,0,0.28), 0 8px 32px rgba(0,0,0,0.6)"
+            : "inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 8px rgba(0,0,0,0.55), 0 8px 32px rgba(0,0,0,0.55)",
           transition: "border-color 0.15s, box-shadow 0.15s",
           display: "flex",
           flexDirection: "column",
@@ -156,10 +158,11 @@ export function FlowNodeCard({
         {/* Header stripe */}
         <div
           style={{
-            height: 3,
+            height: 4,
             background: meta.color,
-            opacity: isSelected ? 1 : 0.6,
+            opacity: 1,
             flexShrink: 0,
+            boxShadow: `0 0 10px ${meta.color}60`,
           }}
         />
 
@@ -170,7 +173,7 @@ export function FlowNodeCard({
             alignItems: "center",
             gap: 8,
             padding: "8px 10px 6px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid rgba(255,255,255,0.09)",
             flexShrink: 0,
           }}
         >
@@ -179,7 +182,7 @@ export function FlowNodeCard({
               width: 26,
               height: 26,
               borderRadius: 8,
-              background: `${meta.color}1A`,
+              background: `${meta.color}2A`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -195,7 +198,7 @@ export function FlowNodeCard({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "rgba(255,255,255,0.88)",
+                color: "rgba(255,255,255,0.93)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -283,15 +286,16 @@ export function FlowNodeCard({
               >
                 <div
                   style={{
-                    width: 14,
-                    height: 14,
+                    width: 15,
+                    height: 15,
                     borderRadius: "50%",
                     border: `2px solid ${color}`,
-                    background: "#0A0D1A",
+                    background: "#0D1228",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     transition: "transform 0.15s",
+                    boxShadow: `0 0 6px ${color}50`,
                   }}
                 >
                   <div
@@ -300,6 +304,7 @@ export function FlowNodeCard({
                       height: 5,
                       borderRadius: "50%",
                       background: color,
+                      boxShadow: `0 0 4px ${color}`,
                     }}
                   />
                 </div>
@@ -454,6 +459,46 @@ function NodePreview({ node }: { node: FlowNode }) {
             Não configurado
           </p>
         )}
+      </div>
+    );
+  }
+
+  if (node.type === "http_request") {
+    const url = cfg.url as string | undefined;
+    const fields = Array.isArray(cfg.profile_fields) ? (cfg.profile_fields as string[]) : [];
+    const extras = cfg.extra_payload && typeof cfg.extra_payload === "object"
+      ? Object.keys(cfg.extra_payload as Record<string, unknown>).length
+      : 0;
+
+    const shortUrl = url
+      ? url.replace(/^https?:\/\//, "").slice(0, 28) + (url.length > 35 ? "…" : "")
+      : undefined;
+
+    return (
+      <div style={style}>
+        {shortUrl ? (
+          <p style={{ ...textStyle, fontFamily: "monospace", fontSize: 9 }}>
+            POST <span style={valStyle}>{shortUrl}</span>
+          </p>
+        ) : (
+          <p style={{ ...textStyle, color: "rgba(255,255,255,0.2)" }}>URL não configurada</p>
+        )}
+        <p style={textStyle}>
+          {fields.length > 0 && (
+            <span style={{ color: "rgba(168,85,247,0.7)" }}>
+              {fields.length} campo{fields.length > 1 ? "s" : ""} do perfil
+            </span>
+          )}
+          {fields.length > 0 && extras > 0 && " · "}
+          {extras > 0 && (
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>
+              +{extras} extra{extras > 1 ? "s" : ""}
+            </span>
+          )}
+          {fields.length === 0 && extras === 0 && (
+            <span style={{ color: "rgba(255,255,255,0.2)" }}>Sem campos configurados</span>
+          )}
+        </p>
       </div>
     );
   }

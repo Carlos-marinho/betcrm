@@ -3,12 +3,27 @@
 import { DashboardShell } from "@/components/dashboard/shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { useAnalyticsOverview, useRecentEvents } from "@/lib/hooks";
-import { Users, TrendingUp, MessageSquare, Workflow } from "lucide-react";
+import { Users, TrendingUp, MessageSquare, Workflow, History } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { isAuthenticated } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+const PERIODS = [
+  { label: "6h",  hours: 6 },
+  { label: "24h", hours: 24 },
+  { label: "7d",  hours: 168 },
+  { label: "30d", hours: 720 },
+] as const;
+
+type PeriodHours = (typeof PERIODS)[number]["hours"];
+
+function windowLabel(hours: number): string {
+  if (hours < 24) return `${hours}h`;
+  return `${hours / 24}d`;
+}
 
 function eventColor(type: string) {
   if (type.includes("deposit.completed")) return "badge-teal";
@@ -22,8 +37,9 @@ function eventColor(type: string) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { data, isLoading } = useAnalyticsOverview(24);
-  const { data: eventsData } = useRecentEvents({ limit: 8, hours: 24 });
+  const [hours, setHours] = useState<PeriodHours>(24);
+  const { data, isLoading } = useAnalyticsOverview(hours);
+  const { data: eventsData } = useRecentEvents({ limit: 8, hours, paused: hours > 24 });
 
   useEffect(() => {
     if (!isAuthenticated()) router.push("/login");
@@ -35,6 +51,8 @@ export default function DashboardPage() {
       : "—";
 
   const liveEvents = eventsData?.results ?? [];
+  const isLive = hours <= 24;
+  const wLabel = windowLabel(hours);
 
   return (
     <DashboardShell>
@@ -43,11 +61,43 @@ export default function DashboardPage() {
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Últimas 24h · atualiza a cada 30s</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Últimas {wLabel}
+              {isLive && " · atualiza a cada 30s"}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-teal">
-            <span className="live-dot" />
-            Ao vivo
+
+          <div className="flex items-center gap-3">
+            {/* Period selector */}
+            <div className="flex items-center bg-card border border-border rounded-lg p-0.5 gap-0.5">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.hours}
+                  onClick={() => setHours(p.hours)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-data font-medium transition-all duration-150",
+                    hours === p.hours
+                      ? "bg-gold/10 text-gold border border-gold/20"
+                      : "text-muted-foreground hover:text-foreground border border-transparent"
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Live / historic badge */}
+            {isLive ? (
+              <div className="flex items-center gap-1.5 text-xs text-teal">
+                <span className="live-dot" />
+                Ao vivo
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <History className="w-3 h-3" />
+                Histórico
+              </div>
+            )}
           </div>
         </div>
 
@@ -56,7 +106,7 @@ export default function DashboardPage() {
           <MetricCard
             title="Total de Perfis"
             value={isLoading ? "—" : (data?.profiles.total ?? 0).toLocaleString("pt-BR")}
-            description={`+${data?.profiles.new ?? 0} novos hoje`}
+            description={`+${data?.profiles.new ?? 0} novos nas últ. ${wLabel}`}
             icon={<Users />}
             accent="default"
             loading={isLoading}
@@ -64,13 +114,13 @@ export default function DashboardPage() {
           <MetricCard
             title="Conversão FTD"
             value={isLoading ? "—" : ftdRate}
-            description={`${data?.profiles.ftd ?? 0} FTDs hoje`}
+            description={`${data?.profiles.ftd ?? 0} FTDs nas últ. ${wLabel}`}
             icon={<TrendingUp />}
             accent="gold"
             loading={isLoading}
           />
           <MetricCard
-            title="Mensagens (24h)"
+            title={`Mensagens (${wLabel})`}
             value={isLoading ? "—" : (data?.messages.sent ?? 0).toLocaleString("pt-BR")}
             description={`${data?.messages.open_rate ?? 0}% taxa de abertura`}
             icon={<MessageSquare />}
@@ -89,20 +139,27 @@ export default function DashboardPage() {
 
         {/* Bottom Grid */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Live Events Feed */}
+          {/* Events Feed */}
           <div className="card-vault p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-semibold text-sm">Feed de Eventos</h3>
-              <div className="flex items-center gap-1.5 text-xs text-teal">
-                <span className="live-dot" />
-                ao vivo
-              </div>
+              {isLive ? (
+                <div className="flex items-center gap-1.5 text-xs text-teal">
+                  <span className="live-dot" />
+                  ao vivo
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <History className="w-3 h-3" />
+                  últ. {wLabel}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
               {liveEvents.length === 0 && (
                 <p className="text-xs text-muted-foreground py-4 text-center">
-                  Nenhum evento nas últimas 24h
+                  Nenhum evento nas últimas {wLabel}
                 </p>
               )}
               {liveEvents.map((ev) => (
@@ -130,7 +187,7 @@ export default function DashboardPage() {
           <div className="card-vault p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-semibold text-sm">Performance de Mensagens</h3>
-              <span className="badge-muted">24h</span>
+              <span className="badge-muted">{wLabel}</span>
             </div>
 
             {isLoading ? (
@@ -142,10 +199,10 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {[
-                  { label: "Enviadas", value: data?.messages.sent ?? 0, max: data?.messages.total ?? 1, color: "bg-gold" },
-                  { label: "Entregues", value: data?.messages.delivered ?? 0, max: data?.messages.total ?? 1, color: "bg-teal" },
-                  { label: "Abertas", value: data?.messages.opened ?? 0, max: data?.messages.total ?? 1, color: "bg-teal/60" },
-                  { label: "Clicadas", value: data?.messages.clicked ?? 0, max: data?.messages.total ?? 1, color: "bg-teal/30" },
+                  { label: "Enviadas",  value: data?.messages.sent ?? 0,       max: data?.messages.total ?? 1, color: "bg-gold" },
+                  { label: "Entregues", value: data?.messages.delivered ?? 0,   max: data?.messages.total ?? 1, color: "bg-teal" },
+                  { label: "Abertas",   value: data?.messages.opened ?? 0,      max: data?.messages.total ?? 1, color: "bg-teal/60" },
+                  { label: "Clicadas",  value: data?.messages.clicked ?? 0,     max: data?.messages.total ?? 1, color: "bg-teal/30" },
                 ].map((row) => {
                   const pct = row.max > 0 ? Math.round((row.value / row.max) * 100) : 0;
                   return (

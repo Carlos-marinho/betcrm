@@ -9,6 +9,7 @@ import {
   Tag,
   XCircle,
   Timer,
+  Webhook,
   LogOut,
   Plus,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const PALETTE: { type: NodeType; icon: React.FC<{ style?: React.CSSProperties }>
   { type: "add_tag", icon: Tag },
   { type: "remove_tag", icon: XCircle },
   { type: "wait_until_event", icon: Timer },
+  { type: "http_request", icon: Webhook },
   { type: "exit", icon: LogOut },
 ];
 
@@ -30,6 +32,7 @@ const SECTION_LABELS: Partial<Record<NodeType, string>> = {
   send_message: "Ações",
   condition: "Lógica",
   add_tag: "Perfil",
+  http_request: "Integrações",
   exit: "Saída",
 };
 
