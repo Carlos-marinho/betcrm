@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import logging
+from collections.abc import Iterable
 from datetime import datetime
 
 from django.conf import settings
@@ -11,28 +12,13 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def verify_hmac_signature(body: bytes, signature: str, secret: str = None) -> bool:
-    """
-    Valida assinatura HMAC-SHA256 de um webhook.
+def _normalize_signature(signature: str) -> str:
+    return signature.strip().removeprefix("sha256=")
 
-    Args:
-        body: bytes raw do request
-        signature: valor do header X-Signature ou X-Webhook-Signature
-        secret: secret a usar (padrão: WEBHOOK_HMAC_SECRET do settings)
 
-    Returns:
-        True se válida
-    """
-    if not signature:
-        logger.debug("HMAC: header de assinatura ausente.")
-        return False
-
-    secret = secret or settings.WEBHOOK_HMAC_SECRET
-    if not secret:
-        logger.warning(
-            "HMAC: secret não configurado — configure WEBHOOK_HMAC_SECRET "
-            "ou WEBHOOK_META_SYSTEM_SECRET no .env."
-        )
+def hmac_signature_matches(body: bytes, signature: str, secret: str) -> bool:
+    """Retorna True se a assinatura HMAC-SHA256 confere para um secret."""
+    if not signature or not secret:
         return False
 
     expected = hmac.new(
@@ -41,17 +27,58 @@ def verify_hmac_signature(body: bytes, signature: str, secret: str = None) -> bo
         hashlib.sha256,
     ).hexdigest()
 
-    # Strip "sha256=" prefix if present (Meta-System-Webhook format)
-    sig_value = signature.removeprefix("sha256=")
+    return hmac.compare_digest(expected, _normalize_signature(signature))
 
-    result = hmac.compare_digest(expected, sig_value)
-    if not result:
+
+def verify_hmac_signature(
+    body: bytes,
+    signature: str,
+    secret: str = None,
+    secrets: Iterable[str] | None = None,
+) -> bool:
+    """
+    Valida assinatura HMAC-SHA256 de um webhook.
+
+    Args:
+        body: bytes raw do request
+        signature: valor do header X-Signature ou X-Webhook-Signature
+        secret: secret a usar (padrão: WEBHOOK_HMAC_SECRET do settings)
+        secrets: lista de secrets válidos; se informado, substitui ``secret``
+
+    Returns:
+        True se válida
+    """
+    if not signature:
+        logger.debug("HMAC: header de assinatura ausente.")
+        return False
+
+    if secrets is None:
+        secrets_to_try = [secret or settings.WEBHOOK_HMAC_SECRET]
+    else:
+        secrets_to_try = list(secrets)
+
+    secrets_to_try = [value for value in dict.fromkeys(secrets_to_try) if value]
+    if not secrets_to_try:
         logger.warning(
-            "HMAC: assinatura inválida. recebida=%.8s... esperada=%.8s...",
-            sig_value,
-            expected,
+            "HMAC: secret não configurado — configure WEBHOOK_HMAC_SECRET "
+            "ou WEBHOOK_META_SYSTEM_SECRET no .env."
         )
-    return result
+        return False
+
+    if any(hmac_signature_matches(body, signature, candidate) for candidate in secrets_to_try):
+        return True
+
+    sig_value = _normalize_signature(signature)
+    expected_prefixes = [
+        hmac.new(candidate.encode("utf-8"), body, hashlib.sha256).hexdigest()[:8]
+        for candidate in secrets_to_try
+    ]
+    logger.warning(
+        "HMAC: assinatura inválida. recebida=%.8s... esperada=%s...",
+        sig_value,
+        "/".join(expected_prefixes),
+    )
+    return False
 
 
 def is_quiet_hours(at: datetime = None) -> bool:

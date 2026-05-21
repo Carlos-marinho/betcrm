@@ -3,6 +3,7 @@
 import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -16,7 +17,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
-from apps.core.utils import verify_hmac_signature
+from apps.core.models import SystemSetting
+from apps.core.utils import hmac_signature_matches, verify_hmac_signature
 
 from .models import Event, EventType
 from .serializers import EventIngestSerializer, EventListSerializer
@@ -27,6 +29,33 @@ logger = logging.getLogger(__name__)
 
 class WebhookThrottle(AnonRateThrottle):
     scope = "webhook"
+
+
+def _unique_nonempty(values):
+    return [value for value in dict.fromkeys(values) if value]
+
+
+def _get_ingest_api_key() -> str:
+    return SystemSetting.get_instance().ingest_api_key
+
+
+def _mark_ingest_api_key_used(api_key: str) -> None:
+    SystemSetting.objects.filter(pk=1, ingest_api_key=api_key).update(
+        ingest_api_key_last_used_at=timezone.now()
+    )
+
+
+def _verify_webhook_signature(request, signature: str, *configured_secrets: str) -> bool:
+    ingest_api_key = _get_ingest_api_key()
+    secrets = _unique_nonempty([*configured_secrets, ingest_api_key])
+
+    is_valid = verify_hmac_signature(request.body, signature, secrets=secrets)
+    if is_valid and ingest_api_key and hmac_signature_matches(
+        request.body, signature, ingest_api_key
+    ):
+        _mark_ingest_api_key_used(ingest_api_key)
+
+    return is_valid
 
 
 @api_view(["POST"])
@@ -59,7 +88,7 @@ def ingest_event(request):
     """
     # 1. Validar assinatura HMAC
     signature = request.headers.get("X-Signature", "")
-    if not verify_hmac_signature(request.body, signature):
+    if not _verify_webhook_signature(request, signature, settings.WEBHOOK_HMAC_SECRET):
         logger.warning("Webhook com HMAC inválido. IP=%s", request.META.get("REMOTE_ADDR"))
         return Response({"error": "invalid_signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -153,12 +182,8 @@ def ingest_meta_system_event(request):
         }
     """
     # 1. Validar assinatura HMAC (formato: sha256=<hash>)
-    from django.conf import settings as django_settings
-
     signature = request.headers.get("X-Webhook-Signature", "")
-    if not verify_hmac_signature(
-        request.body, signature, secret=django_settings.WEBHOOK_META_SYSTEM_SECRET
-    ):
+    if not _verify_webhook_signature(request, signature, settings.WEBHOOK_META_SYSTEM_SECRET):
         logger.warning(
             "Meta-System webhook com HMAC inválido. IP=%s",
             request.META.get("REMOTE_ADDR"),

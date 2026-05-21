@@ -8,6 +8,7 @@ import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from apps.core.models import SystemSetting
 from apps.events.models import Event, EventType
 
 
@@ -93,3 +94,46 @@ def test_ingest_event_duplicate_idempotent(api_client, event_type_register, sett
     assert r2.data["status"] == "duplicate"
 
     assert Event.objects.count() == 1  # não duplicou
+
+
+def test_ingest_meta_system_accepts_active_ingest_api_key(
+    api_client,
+    event_type_register,
+    settings,
+):
+    settings.WEBHOOK_META_SYSTEM_SECRET = "different_env_secret"
+    ingest_api_key = "bcrm_sk_live_test_meta_system"
+    SystemSetting.objects.update_or_create(
+        pk=1,
+        defaults={"ingest_api_key": ingest_api_key},
+    )
+
+    payload = {
+        "event": "user.register",
+        "timestamp": "2026-05-17T14:30:00Z",
+        "data": {
+            "userId": "user_001",
+            "email": "test@example.com",
+            "fullName": "Test User",
+            "phone": "5511999999999",
+        },
+        "metadata": {"requestId": "req_meta_001"},
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    signature = "sha256=" + _make_signature(body, ingest_api_key)
+
+    response = api_client.post(
+        "/api/v1/events/ingest/meta-system/",
+        data=body,
+        content_type="application/json",
+        HTTP_X_WEBHOOK_SIGNATURE=signature,
+        HTTP_X_WEBHOOK_DELIVERY="delivery_meta_001",
+        HTTP_X_WEBHOOK_EVENT="user.register",
+    )
+
+    assert response.status_code == 202
+    assert response.data["status"] == "accepted"
+    assert Event.objects.count() == 1
+
+    setting = SystemSetting.objects.get(pk=1)
+    assert setting.ingest_api_key_last_used_at is not None
