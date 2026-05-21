@@ -111,6 +111,7 @@ interface ScheduleState {
   timezone: string;
   audience: "all" | "segment";
   segment_code: string;
+  send_rate_per_minute: number;
 }
 
 const DEFAULT_SCHEDULE: ScheduleState = {
@@ -123,6 +124,7 @@ const DEFAULT_SCHEDULE: ScheduleState = {
   timezone: "America/Sao_Paulo",
   audience: "all",
   segment_code: "",
+  send_rate_per_minute: 120,
 };
 
 function scheduleConfigToState(config?: Partial<ScheduleConfig>): ScheduleState {
@@ -137,6 +139,7 @@ function scheduleConfigToState(config?: Partial<ScheduleConfig>): ScheduleState 
     timezone: config.timezone ?? "America/Sao_Paulo",
     audience: config.audience ?? "all",
     segment_code: config.segment_code ?? "",
+    send_rate_per_minute: config.send_rate_per_minute ?? 120,
   };
 }
 
@@ -148,6 +151,7 @@ function scheduleStateToConfig(s: ScheduleState): ScheduleConfig {
     segment_code: s.audience === "segment" ? s.segment_code : undefined,
     start_at: s.start_at || undefined,
     end_at: s.end_at || undefined,
+    send_rate_per_minute: s.send_rate_per_minute,
   };
   if (s.recurrence !== "once") {
     base.time = s.time;
@@ -532,6 +536,38 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Taxa de envio */}
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Taxa de envio (por minuto)
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    className="h-9 font-data text-sm w-28"
+                    value={schedule.send_rate_per_minute}
+                    onChange={(e) => patchSchedule({ send_rate_per_minute: Math.max(1, parseInt(e.target.value) || 120) })}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {schedule.send_rate_per_minute >= 1 && (
+                      <>
+                        ≈ 1 envio a cada{" "}
+                        <span className="font-medium text-foreground">
+                          {(60 / schedule.send_rate_per_minute) >= 1
+                            ? `${Math.round(60 / schedule.send_rate_per_minute)}s`
+                            : `${(60 / schedule.send_rate_per_minute * 1000).toFixed(0)}ms`}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground/70">
+                  Espaça os envios para não parecer spam. 120/min recomendado para email.
+                </p>
               </div>
 
               {/* Público-alvo */}

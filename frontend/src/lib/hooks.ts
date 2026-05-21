@@ -114,6 +114,7 @@ export interface ScheduleConfig {
   timezone: string;
   audience: "all" | "segment";
   segment_code?: string;
+  send_rate_per_minute?: number;
 }
 
 export interface Flow {
