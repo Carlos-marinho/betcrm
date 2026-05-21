@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Info, Plus, Trash2 } from "lucide-react";
+import { X, Info, Plus, Trash2, Send, Zap, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { api } from "@/lib/api";
 import { FlowNode, NODE_META } from "./types";
 
 const TRIGGER_EVENTS = [
@@ -187,6 +188,9 @@ export function NodeConfigPanel({ node, onChange, onClose }: NodeConfigPanelProp
                 </span>
               </label>
             </div>
+            {node.config.channel === "email" && !!node.config.template_code && (
+              <TestEmailSection templateCode={String(node.config.template_code)} />
+            )}
           </>
         )}
 
@@ -492,6 +496,324 @@ function HttpRequestConfig({
         <p>O payload sempre inclui <span style={{ color: "rgba(168,85,247,0.9)" }}>_betcrm_flow</span> e <span style={{ color: "rgba(168,85,247,0.9)" }}>_betcrm_execution</span> para rastreabilidade.</p>
         <p>Erros HTTP não interrompem o fluxo — são registrados no contexto e a execução continua.</p>
       </Callout>
+
+      <TestWebhookSection
+        url={String(node.config.url ?? "")}
+        profileFields={profileFields}
+        extraPayload={extraPayload}
+      />
+    </>
+  );
+}
+
+// ── Test email section ────────────────────────────────────────────────────────
+
+function TestEmailSection({ templateCode }: { templateCode: string }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message_id?: string; error?: string } | null>(null);
+
+  async function send() {
+    if (!email.trim()) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const { data } = await api.post("/flows/test_email/", {
+        template_code: templateCode,
+        test_email: email.trim(),
+      });
+      setResult(data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Erro desconhecido";
+      setResult({ success: false, error: msg });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ border: "1px solid rgba(59,130,246,0.2)", background: "rgba(59,130,246,0.04)" }}
+    >
+      <button
+        onClick={() => { setOpen((v) => !v); setResult(null); }}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors"
+        style={{ color: "rgba(59,130,246,0.85)" }}
+      >
+        <span className="flex items-center gap-1.5 text-xs font-semibold">
+          <Send className="w-3 h-3" />
+          Enviar e-mail de teste
+        </span>
+        {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-2.5" style={{ borderTop: "1px solid rgba(59,130,246,0.12)" }}>
+          <p className="text-[10px] pt-2.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+            Renderiza o template com perfil fictício e envia para o e-mail abaixo via provider ativo.
+          </p>
+          <div className="flex gap-1.5">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              className="flex-1 rounded-lg px-3 py-1.5 text-xs outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.8)",
+              }}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              onFocus={(e) => { e.target.style.borderColor = "rgba(59,130,246,0.4)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.08)"; }}
+            />
+            <button
+              onClick={send}
+              disabled={loading || !email.trim()}
+              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity disabled:opacity-40"
+              style={{ background: "rgba(59,130,246,0.2)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.25)" }}
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              {loading ? "Enviando…" : "Enviar"}
+            </button>
+          </div>
+
+          {result && (
+            <div
+              className="flex items-start gap-2 rounded-lg px-2.5 py-2"
+              style={{
+                background: result.success ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+                border: `1px solid ${result.success ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+              }}
+            >
+              {result.success
+                ? <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "#10B981" }} />
+                : <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "#EF4444" }} />}
+              <p className="text-[10px]" style={{ color: result.success ? "#10B981" : "#EF4444" }}>
+                {result.success
+                  ? `Enviado! ID: ${result.message_id || "—"}`
+                  : result.error}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Test webhook section + modal ──────────────────────────────────────────────
+
+interface WebhookTestResult {
+  status_code?: number;
+  body?: unknown;
+  headers?: Record<string, string>;
+  duration_ms?: number;
+  error?: string;
+}
+
+function WebhookResultModal({
+  result,
+  onClose,
+}: {
+  result: WebhookTestResult;
+  onClose: () => void;
+}) {
+  const isOk = result.status_code !== undefined && result.status_code < 400;
+  const bodyStr =
+    result.body !== undefined
+      ? typeof result.body === "string"
+        ? result.body
+        : JSON.stringify(result.body, null, 2)
+      : "";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl overflow-hidden shadow-2xl"
+        style={{ background: "#0D1120", border: "1px solid rgba(255,255,255,0.08)", maxHeight: "80vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Zap className="w-4 h-4" style={{ color: "#A855F7" }} />
+            <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.88)" }}>
+              Resultado do teste
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {result.duration_ms !== undefined && (
+              <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+                {result.duration_ms}ms
+              </span>
+            )}
+            <button onClick={onClose} style={{ color: "rgba(255,255,255,0.3)" }}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: "calc(80vh - 56px)" }}>
+          {/* Status or error */}
+          {result.error ? (
+            <div
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5"
+              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+            >
+              <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "#EF4444" }} />
+              <span className="text-xs" style={{ color: "#EF4444" }}>{result.error}</span>
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5"
+              style={{
+                background: isOk ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+                border: `1px solid ${isOk ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+              }}
+            >
+              {isOk
+                ? <CheckCircle className="w-4 h-4 shrink-0" style={{ color: "#10B981" }} />
+                : <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "#EF4444" }} />}
+              <span
+                className="text-sm font-bold"
+                style={{ color: isOk ? "#10B981" : "#EF4444" }}
+              >
+                HTTP {result.status_code}
+              </span>
+              <span className="text-xs ml-1" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {isOk ? "sucesso" : "erro"}
+              </span>
+            </div>
+          )}
+
+          {/* Body */}
+          {bodyStr && (
+            <div>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-1.5"
+                style={{ color: "rgba(255,255,255,0.3)" }}
+              >
+                Response body
+              </p>
+              <pre
+                className="rounded-lg px-3 py-2.5 text-[10px] overflow-x-auto whitespace-pre-wrap break-all"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  color: "rgba(255,255,255,0.65)",
+                  fontFamily: "monospace",
+                }}
+              >
+                {bodyStr}
+              </pre>
+            </div>
+          )}
+
+          {/* Selected headers */}
+          {result.headers && Object.keys(result.headers).length > 0 && (
+            <div>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-1.5"
+                style={{ color: "rgba(255,255,255,0.3)" }}
+              >
+                Headers da resposta
+              </p>
+              <div
+                className="rounded-lg px-3 py-2 space-y-1"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {Object.entries(result.headers)
+                  .filter(([k]) =>
+                    ["content-type", "x-request-id", "x-powered-by", "server"].includes(k.toLowerCase())
+                  )
+                  .map(([k, v]) => (
+                    <div key={k} className="flex gap-2 text-[10px]" style={{ fontFamily: "monospace" }}>
+                      <span style={{ color: "rgba(168,85,247,0.7)", minWidth: 120 }}>{k}</span>
+                      <span style={{ color: "rgba(255,255,255,0.5)" }}>{v}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TestWebhookSection({
+  url,
+  profileFields,
+  extraPayload,
+}: {
+  url: string;
+  profileFields: string[];
+  extraPayload: Record<string, string>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [modalResult, setModalResult] = useState<WebhookTestResult | null>(null);
+
+  async function runTest() {
+    if (!url.trim()) return;
+    setLoading(true);
+    setModalResult(null);
+    try {
+      const { data } = await api.post("/flows/test_webhook/", {
+        url: url.trim(),
+        profile_fields: profileFields,
+        extra_payload: extraPayload,
+      });
+      setModalResult(data);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: WebhookTestResult; status?: number } };
+      if (axiosErr.response?.data) {
+        setModalResult(axiosErr.response.data);
+      } else {
+        setModalResult({ error: "Erro ao conectar ao backend" });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={runTest}
+        disabled={loading || !url.trim()}
+        className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold transition-opacity disabled:opacity-40"
+        style={{
+          background: "rgba(168,85,247,0.12)",
+          border: "1px solid rgba(168,85,247,0.25)",
+          color: "#A855F7",
+        }}
+      >
+        {loading
+          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          : <Zap className="w-3.5 h-3.5" />}
+        {loading ? "Disparando…" : "Testar webhook agora"}
+      </button>
+
+      {modalResult && (
+        <WebhookResultModal
+          result={modalResult}
+          onClose={() => setModalResult(null)}
+        />
+      )}
     </>
   );
 }
