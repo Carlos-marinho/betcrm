@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { DashboardShell } from "@/components/dashboard/shell";
 import {
-  useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments, type Flow,
+  useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments,
+  type Flow, type ScheduleConfig,
 } from "@/lib/hooks";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -18,10 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Workflow, Play, Pause, Plus, Pencil, Activity, CheckCircle2,
-  XCircle, AlertTriangle, Clock, Zap, LayoutGrid,
+  XCircle, AlertTriangle, Clock, Zap, LayoutGrid, CalendarClock, Users, Calendar,
 } from "lucide-react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
@@ -40,6 +41,25 @@ const TRIGGER_EVENTS = [
   { value: "cashback.paid", label: "Cashback pago" },
 ];
 
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Seg" },
+  { value: 1, label: "Ter" },
+  { value: 2, label: "Qua" },
+  { value: 3, label: "Qui" },
+  { value: 4, label: "Sex" },
+  { value: 5, label: "Sáb" },
+  { value: 6, label: "Dom" },
+];
+
+const TIMEZONES = [
+  { value: "America/Sao_Paulo", label: "Brasília (UTC-3)" },
+  { value: "America/Manaus", label: "Manaus (UTC-4)" },
+  { value: "America/Belem", label: "Belém (UTC-3)" },
+  { value: "America/Fortaleza", label: "Fortaleza (UTC-3)" },
+  { value: "America/Recife", label: "Recife (UTC-3)" },
+  { value: "UTC", label: "UTC" },
+];
+
 const flowSchema = z.object({
   name: z.string().min(2, "Nome precisa de pelo menos 2 caracteres"),
   code: z.string().min(2, "Código muito curto").regex(/^[a-z0-9_]+$/, "Apenas letras minúsculas, números e _"),
@@ -48,7 +68,8 @@ const flowSchema = z.object({
   reentry_cooldown_days: z.coerce.number().int().min(0).default(30),
 });
 type FlowForm = z.infer<typeof flowSchema>;
-type TriggerType = "event" | "segment_entry";
+type TriggerType = "event" | "segment_entry" | "scheduled";
+type Recurrence = "once" | "daily" | "weekly" | "monthly";
 
 const DEFAULT_DEFINITION = {
   nodes: [
@@ -77,6 +98,76 @@ const STATE_FILTERS = [
   { value: "failed", label: "Falhos" },
 ];
 
+// ── Schedule state default ───────────────────────────────────────────────────
+
+interface ScheduleState {
+  recurrence: Recurrence;
+  start_at: string;
+  end_at: string;
+  time: string;
+  days_of_week: number[];
+  day_of_month: number;
+  timezone: string;
+  audience: "all" | "segment";
+  segment_code: string;
+}
+
+const DEFAULT_SCHEDULE: ScheduleState = {
+  recurrence: "once",
+  start_at: "",
+  end_at: "",
+  time: "09:00",
+  days_of_week: [0, 1, 2, 3, 4],
+  day_of_month: 1,
+  timezone: "America/Sao_Paulo",
+  audience: "all",
+  segment_code: "",
+};
+
+function scheduleConfigToState(config?: Partial<ScheduleConfig>): ScheduleState {
+  if (!config || !config.recurrence) return { ...DEFAULT_SCHEDULE };
+  return {
+    recurrence: config.recurrence ?? "once",
+    start_at: config.start_at ?? "",
+    end_at: config.end_at ?? "",
+    time: config.time ?? "09:00",
+    days_of_week: config.days_of_week ?? [0, 1, 2, 3, 4],
+    day_of_month: config.day_of_month ?? 1,
+    timezone: config.timezone ?? "America/Sao_Paulo",
+    audience: config.audience ?? "all",
+    segment_code: config.segment_code ?? "",
+  };
+}
+
+function scheduleStateToConfig(s: ScheduleState): ScheduleConfig {
+  const base: ScheduleConfig = {
+    recurrence: s.recurrence,
+    timezone: s.timezone,
+    audience: s.audience,
+    segment_code: s.audience === "segment" ? s.segment_code : undefined,
+    start_at: s.start_at || undefined,
+    end_at: s.end_at || undefined,
+  };
+  if (s.recurrence !== "once") {
+    base.time = s.time;
+    if (s.recurrence === "weekly") base.days_of_week = s.days_of_week;
+    if (s.recurrence === "monthly") base.day_of_month = s.day_of_month;
+  }
+  return base;
+}
+
+function recurrenceLabel(cfg: Partial<ScheduleConfig>): string {
+  const labels: Record<string, string> = {
+    once: "Única vez",
+    daily: "Diária",
+    weekly: "Semanal",
+    monthly: "Mensal",
+  };
+  return labels[cfg.recurrence ?? "once"] ?? cfg.recurrence ?? "—";
+}
+
+// ── FlowModal ────────────────────────────────────────────────────────────────
+
 interface FlowModalProps {
   open: boolean;
   onClose: () => void;
@@ -104,13 +195,16 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
   const allowReentry = watch("allow_reentry");
 
   const [triggerType, setTriggerType] = useState<TriggerType>(
-    flow?.trigger_type === "segment_entry" ? "segment_entry" : "event"
+    (flow?.trigger_type as TriggerType) ?? "event"
   );
   const [triggerEvent, setTriggerEvent] = useState(
     typeof flow?.trigger_config?.event_code === "string" ? flow.trigger_config.event_code : ""
   );
   const [triggerSegment, setTriggerSegment] = useState(
     typeof flow?.trigger_config?.segment_code === "string" ? flow.trigger_config.segment_code : ""
+  );
+  const [schedule, setSchedule] = useState<ScheduleState>(
+    scheduleConfigToState(flow?.schedule_config)
   );
 
   useEffect(() => {
@@ -125,9 +219,10 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
           }
         : { name: "", code: "", description: "", allow_reentry: false, reentry_cooldown_days: 30 }
     );
-    setTriggerType(flow?.trigger_type === "segment_entry" ? "segment_entry" : "event");
+    setTriggerType((flow?.trigger_type as TriggerType) ?? "event");
     setTriggerEvent(typeof flow?.trigger_config?.event_code === "string" ? flow.trigger_config.event_code : "");
     setTriggerSegment(typeof flow?.trigger_config?.segment_code === "string" ? flow.trigger_config.segment_code : "");
+    setSchedule(scheduleConfigToState(flow?.schedule_config));
   }, [flow, reset, open]);
 
   function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -136,27 +231,49 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
     if (!isEditing) setValue("code", toCode(v));
   }
 
-  async function onSubmit(values: FlowForm) {
-    const trigger_config =
-      triggerType === "event"
-        ? { event_code: triggerEvent }
-        : { segment_code: triggerSegment };
+  function patchSchedule(patch: Partial<ScheduleState>) {
+    setSchedule((prev) => ({ ...prev, ...patch }));
+  }
 
+  async function onSubmit(values: FlowForm) {
     if (triggerType === "event" && !triggerEvent) {
       toast.error("Selecione um evento de disparo");
       return;
     }
-
     if (triggerType === "segment_entry" && !triggerSegment) {
       toast.error("Selecione um segmento de entrada");
       return;
     }
+    if (triggerType === "scheduled") {
+      if (schedule.recurrence === "once" && !schedule.start_at) {
+        toast.error("Informe a data e hora de início para o agendamento");
+        return;
+      }
+      if (schedule.recurrence === "weekly" && schedule.days_of_week.length === 0) {
+        toast.error("Selecione ao menos um dia da semana");
+        return;
+      }
+      if (schedule.audience === "segment" && !schedule.segment_code) {
+        toast.error("Selecione o segmento para o público-alvo");
+        return;
+      }
+    }
+
+    const trigger_config =
+      triggerType === "event"
+        ? { event_code: triggerEvent }
+        : triggerType === "segment_entry"
+          ? { segment_code: triggerSegment }
+          : {};
+
+    const schedule_config = triggerType === "scheduled" ? scheduleStateToConfig(schedule) : {};
 
     try {
       const payload = {
         ...values,
         trigger_type: triggerType,
         trigger_config,
+        schedule_config,
         definition: flow?.definition ?? DEFAULT_DEFINITION,
       };
       if (isEditing && flow) {
@@ -175,15 +292,16 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
 
   function handleClose() {
     reset();
-    setTriggerType(flow?.trigger_type === "segment_entry" ? "segment_entry" : "event");
+    setTriggerType((flow?.trigger_type as TriggerType) ?? "event");
     setTriggerEvent(typeof flow?.trigger_config?.event_code === "string" ? flow.trigger_config.event_code : "");
     setTriggerSegment(typeof flow?.trigger_config?.segment_code === "string" ? flow.trigger_config.segment_code : "");
+    setSchedule(scheduleConfigToState(flow?.schedule_config));
     onClose();
   }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Fluxo" : "Novo Fluxo"}</DialogTitle>
           <DialogDescription>
@@ -192,6 +310,7 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Nome */}
           <div className="space-y-1.5">
             <Label htmlFor="flow-name">Nome</Label>
             <Input
@@ -203,6 +322,7 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
+          {/* Código */}
           <div className="space-y-1.5">
             <Label htmlFor="flow-code">Código</Label>
             <Input
@@ -214,6 +334,7 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
             {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
           </div>
 
+          {/* Tipo de gatilho */}
           <div className="space-y-1.5">
             <Label>Tipo de gatilho</Label>
             <Select value={triggerType} onValueChange={(value) => setTriggerType(value as TriggerType)}>
@@ -221,13 +342,21 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="event">Evento disparado</SelectItem>
-                <SelectItem value="segment_entry">Entrada em segmentação</SelectItem>
+                <SelectItem value="event">
+                  <span className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-gold" /> Evento disparado</span>
+                </SelectItem>
+                <SelectItem value="segment_entry">
+                  <span className="flex items-center gap-2"><LayoutGrid className="w-3.5 h-3.5 text-teal" /> Entrada em segmento</span>
+                </SelectItem>
+                <SelectItem value="scheduled">
+                  <span className="flex items-center gap-2"><CalendarClock className="w-3.5 h-3.5 text-violet-400" /> Campanha agendada</span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {triggerType === "event" ? (
+          {/* Gatilho: Evento */}
+          {triggerType === "event" && (
             <div className="space-y-1.5">
               <Label>Evento de disparo</Label>
               <Select value={triggerEvent} onValueChange={setTriggerEvent}>
@@ -246,7 +375,10 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
                 </SelectContent>
               </Select>
             </div>
-          ) : (
+          )}
+
+          {/* Gatilho: Segmento */}
+          {triggerType === "segment_entry" && (
             <div className="space-y-1.5">
               <Label>Segmento de entrada</Label>
               <Select value={triggerSegment} onValueChange={setTriggerSegment}>
@@ -270,6 +402,186 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
             </div>
           )}
 
+          {/* Gatilho: Agendado */}
+          {triggerType === "scheduled" && (
+            <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarClock className="w-4 h-4 text-violet-400" />
+                <span className="text-sm font-medium text-foreground">Configuração de agenda</span>
+              </div>
+
+              {/* Recorrência */}
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Recorrência</Label>
+                <Select
+                  value={schedule.recurrence}
+                  onValueChange={(v) => patchSchedule({ recurrence: v as Recurrence })}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="once">Única vez</SelectItem>
+                    <SelectItem value="daily">Diária</SelectItem>
+                    <SelectItem value="weekly">Semanal</SelectItem>
+                    <SelectItem value="monthly">Mensal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Data/hora de início */}
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {schedule.recurrence === "once" ? "Data e hora *" : "Início (opcional)"}
+                </Label>
+                <Input
+                  type="datetime-local"
+                  className="h-9 font-data text-sm"
+                  value={schedule.start_at}
+                  onChange={(e) => patchSchedule({ start_at: e.target.value })}
+                />
+              </div>
+
+              {/* Horário do dia (para recorrentes) */}
+              {schedule.recurrence !== "once" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Horário do dia</Label>
+                  <Input
+                    type="time"
+                    className="h-9 font-data text-sm w-36"
+                    value={schedule.time}
+                    onChange={(e) => patchSchedule({ time: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* Dias da semana (weekly) */}
+              {schedule.recurrence === "weekly" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dias da semana</Label>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {DAYS_OF_WEEK.map((d) => {
+                      const selected = schedule.days_of_week.includes(d.value);
+                      return (
+                        <button
+                          key={d.value}
+                          type="button"
+                          onClick={() =>
+                            patchSchedule({
+                              days_of_week: selected
+                                ? schedule.days_of_week.filter((x) => x !== d.value)
+                                : [...schedule.days_of_week, d.value].sort(),
+                            })
+                          }
+                          className={`px-2.5 py-1 rounded text-xs font-medium transition-colors border ${
+                            selected
+                              ? "bg-violet-500/20 text-violet-300 border-violet-500/40"
+                              : "bg-white/5 text-muted-foreground border-border hover:border-violet-500/30"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Dia do mês (monthly) */}
+              {schedule.recurrence === "monthly" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dia do mês</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    className="h-9 font-data text-sm w-24"
+                    value={schedule.day_of_month}
+                    onChange={(e) => patchSchedule({ day_of_month: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+              )}
+
+              {/* Data de término (para recorrentes) */}
+              {schedule.recurrence !== "once" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Término (opcional)</Label>
+                  <Input
+                    type="date"
+                    className="h-9 font-data text-sm w-40"
+                    value={schedule.end_at}
+                    onChange={(e) => patchSchedule({ end_at: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* Fuso horário */}
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fuso horário</Label>
+                <Select
+                  value={schedule.timezone}
+                  onValueChange={(v) => patchSchedule({ timezone: v })}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Público-alvo */}
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Público-alvo</Label>
+                <Select
+                  value={schedule.audience}
+                  onValueChange={(v) => patchSchedule({ audience: v as "all" | "segment" })}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Todos os usuários ativos</span>
+                    </SelectItem>
+                    <SelectItem value="segment">
+                      <span className="flex items-center gap-2"><LayoutGrid className="w-3.5 h-3.5" /> Segmento específico</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Segmento */}
+              {schedule.audience === "segment" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Segmento *</Label>
+                  <Select
+                    value={schedule.segment_code}
+                    onValueChange={(v) => patchSchedule({ segment_code: v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Selecione um segmento..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {segments?.results.map((seg) => (
+                        <SelectItem key={seg.id} value={seg.code}>
+                          <span className="flex items-center gap-2">
+                            <LayoutGrid className="w-3.5 h-3.5 text-teal" />
+                            {seg.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Reentrada */}
           <label className="flex items-start gap-3 rounded-md border border-border bg-white/[0.02] p-3">
             <input
               type="checkbox"
@@ -303,6 +615,7 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
             {errors.reentry_cooldown_days && <p className="text-xs text-destructive">{errors.reentry_cooldown_days.message}</p>}
           </div>
 
+          {/* Descrição */}
           <div className="space-y-1.5">
             <Label htmlFor="flow-desc">Descrição <span className="normal-case text-muted-foreground/60">(opcional)</span></Label>
             <Textarea
@@ -334,6 +647,60 @@ function FlowModal({ open, onClose, flow }: FlowModalProps) {
     </Dialog>
   );
 }
+
+// ── Trigger badge ─────────────────────────────────────────────────────────────
+
+function TriggerBadge({ flow }: { flow: Flow }) {
+  if (flow.trigger_type === "event") {
+    const event = TRIGGER_EVENTS.find((e) => e.value === flow.trigger_config?.event_code);
+    return (
+      <span className="flex items-center gap-1 text-xs text-gold/80">
+        <Zap className="w-3 h-3" />
+        {event?.label ?? String(flow.trigger_config?.event_code ?? "evento")}
+      </span>
+    );
+  }
+  if (flow.trigger_type === "segment_entry") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-teal/80">
+        <LayoutGrid className="w-3 h-3" />
+        Segmento: {String(flow.trigger_config?.segment_code ?? "—")}
+      </span>
+    );
+  }
+  if (flow.trigger_type === "scheduled") {
+    const cfg = flow.schedule_config;
+    if (!cfg?.recurrence) return <span className="text-xs text-violet-400/80 flex items-center gap-1"><CalendarClock className="w-3 h-3" /> Agendado</span>;
+    return (
+      <span className="flex items-center gap-1 text-xs text-violet-400/80">
+        <CalendarClock className="w-3 h-3" />
+        {recurrenceLabel(cfg)}
+        {cfg.time && cfg.recurrence !== "once" && ` às ${cfg.time}`}
+        {cfg.audience === "segment" && cfg.segment_code && ` · ${cfg.segment_code}`}
+      </span>
+    );
+  }
+  return null;
+}
+
+// ── Schedule last run info ────────────────────────────────────────────────────
+
+function ScheduleLastRun({ flow }: { flow: Flow }) {
+  if (flow.trigger_type !== "scheduled") return null;
+  if (!flow.last_scheduled_run_at) return (
+    <span className="text-xs text-muted-foreground/60 flex items-center gap-1">
+      <Calendar className="w-3 h-3" /> Nunca executado
+    </span>
+  );
+  return (
+    <span className="text-xs text-muted-foreground flex items-center gap-1">
+      <Calendar className="w-3 h-3" />
+      Última exec. {formatDistanceToNow(new Date(flow.last_scheduled_run_at), { locale: ptBR, addSuffix: true })}
+    </span>
+  );
+}
+
+// ── FlowsPage ─────────────────────────────────────────────────────────────────
 
 export default function FlowsPage() {
   const { data, isLoading } = useFlows();
@@ -421,9 +788,15 @@ export default function FlowsPage() {
                   className="card-vault p-4 flex items-center gap-4 hover:border-gold/20 transition-all group"
                 >
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    flow.is_active ? "bg-teal/10 text-teal" : "bg-white/5 text-muted-foreground"
+                    flow.is_active
+                      ? flow.trigger_type === "scheduled"
+                        ? "bg-violet-500/10 text-violet-400"
+                        : "bg-teal/10 text-teal"
+                      : "bg-white/5 text-muted-foreground"
                   }`}>
-                    <Workflow className="w-4 h-4" />
+                    {flow.trigger_type === "scheduled"
+                      ? <CalendarClock className="w-4 h-4" />
+                      : <Workflow className="w-4 h-4" />}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -435,9 +808,10 @@ export default function FlowsPage() {
                         <span className="badge-muted">inativo</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                       <span className="font-data">{flow.code}</span>
-                      {flow.description && <span className="truncate max-w-xs">{flow.description}</span>}
+                      <TriggerBadge flow={flow} />
+                      <ScheduleLastRun flow={flow} />
                       <span className="shrink-0">
                         atualizado{" "}
                         {formatDistanceToNow(new Date(flow.updated_at), { locale: ptBR, addSuffix: true })}

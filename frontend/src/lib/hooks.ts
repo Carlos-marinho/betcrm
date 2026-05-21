@@ -104,6 +104,18 @@ export function useProfile(id: number) {
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
 
+export interface ScheduleConfig {
+  recurrence: "once" | "daily" | "weekly" | "monthly";
+  start_at?: string;
+  end_at?: string;
+  time?: string;
+  days_of_week?: number[];
+  day_of_month?: number;
+  timezone: string;
+  audience: "all" | "segment";
+  segment_code?: string;
+}
+
 export interface Flow {
   id: number;
   name: string;
@@ -111,6 +123,8 @@ export interface Flow {
   description: string;
   trigger_type: "event" | "segment_entry" | "scheduled";
   trigger_config: Record<string, unknown>;
+  schedule_config: Partial<ScheduleConfig>;
+  last_scheduled_run_at: string | null;
   is_active: boolean;
   allow_reentry: boolean;
   reentry_cooldown_days: number;
