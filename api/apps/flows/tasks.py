@@ -241,10 +241,18 @@ def _enroll_scheduled_audience(flow_id: int, schedule_run_id: int):
         else:
             profiles = Profile.objects.filter(is_deleted=False).only("id")
 
+        # Taxa de envio configurável — default 120/min (2 por segundo).
+        # Garante que execuções não disparem todas de uma vez.
+        rate_per_minute = max(1, int(config.get("send_rate_per_minute", 120)))
+        seconds_between = 60.0 / rate_per_minute
+
         enrolled = 0
+        enroll_index = 0  # índice apenas dos que foram de fato enrolados
         for profile in profiles.iterator(chunk_size=500):
-            if _try_enroll(flow, profile.id, event_id=None, schedule_run_id=run.id):
+            delay = enroll_index * seconds_between
+            if _try_enroll(flow, profile.id, event_id=None, schedule_run_id=run.id, start_delay_seconds=delay):
                 enrolled += 1
+                enroll_index += 1
 
         run.status = "completed"
         run.enrolled_count = enrolled
@@ -357,10 +365,14 @@ def _try_enroll(
     profile_id: int,
     event_id: int | None,
     schedule_run_id: int | None = None,
+    start_delay_seconds: float = 0,
 ) -> bool:
     """
     Tenta enrolar profile no fluxo (respeita allow_reentry e cooldown).
     Retorna True se enrolou, False se ignorado.
+
+    start_delay_seconds: offset de next_run_at para escalonar campanhas
+    agendadas e evitar burst de envios simultâneos.
     """
     # Já tem execução ativa?
     active = FlowExecution.objects.filter(
@@ -389,11 +401,13 @@ def _try_enroll(
             return False
 
     # Cria execução
+    from datetime import timedelta
+
     FlowExecution.objects.create(
         flow=flow,
         profile_id=profile_id,
         current_node_id="start",
-        next_run_at=timezone.now(),
+        next_run_at=timezone.now() + timedelta(seconds=start_delay_seconds),
         trigger_event_id=event_id,
         schedule_run_id=schedule_run_id,
         state="active",
