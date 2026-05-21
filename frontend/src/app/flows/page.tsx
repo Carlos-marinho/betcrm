@@ -7,6 +7,7 @@ import { z } from "zod";
 import { DashboardShell } from "@/components/dashboard/shell";
 import {
   useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments,
+  useFlowScheduleRuns,
   type Flow, type ScheduleConfig,
 } from "@/lib/hooks";
 import {
@@ -685,17 +686,34 @@ function TriggerBadge({ flow }: { flow: Flow }) {
 
 // ── Schedule last run info ────────────────────────────────────────────────────
 
+const RUN_STATUS_CONFIG = {
+  completed: { color: "text-teal", label: "OK" },
+  running:   { color: "text-gold", label: "rodando" },
+  failed:    { color: "text-destructive", label: "falhou" },
+};
+
 function ScheduleLastRun({ flow }: { flow: Flow }) {
+  const { data: runs } = useFlowScheduleRuns(flow.id);
   if (flow.trigger_type !== "scheduled") return null;
-  if (!flow.last_scheduled_run_at) return (
+
+  const last = runs?.[0];
+
+  if (!last) return (
     <span className="text-xs text-muted-foreground/60 flex items-center gap-1">
       <Calendar className="w-3 h-3" /> Nunca executado
     </span>
   );
+
+  const cfg = RUN_STATUS_CONFIG[last.status] ?? RUN_STATUS_CONFIG.completed;
+
   return (
-    <span className="text-xs text-muted-foreground flex items-center gap-1">
-      <Calendar className="w-3 h-3" />
-      Última exec. {formatDistanceToNow(new Date(flow.last_scheduled_run_at), { locale: ptBR, addSuffix: true })}
+    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+      <Calendar className="w-3 h-3 shrink-0" />
+      <span>{formatDistanceToNow(new Date(last.run_at), { locale: ptBR, addSuffix: true })}</span>
+      <span className={`font-medium ${cfg.color}`}>· {cfg.label}</span>
+      {last.status === "completed" && last.enrolled_count > 0 && (
+        <span className="text-muted-foreground/70">· {last.enrolled_count.toLocaleString("pt-BR")} enrolados</span>
+      )}
     </span>
   );
 }

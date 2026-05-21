@@ -229,6 +229,26 @@ export interface FlowExecution {
   error_message: string | null;
 }
 
+export interface FlowScheduleRun {
+  id: number;
+  flow: number;
+  run_at: string;
+  status: "running" | "completed" | "failed";
+  enrolled_count: number;
+  error_message: string;
+}
+
+export function useFlowScheduleRuns(flowId: number) {
+  return useQuery<FlowScheduleRun[]>({
+    queryKey: ["flows", flowId, "schedule_runs"],
+    queryFn: async () => {
+      const { data } = await api.get(`/flows/${flowId}/schedule_runs/`);
+      return data;
+    },
+    enabled: !!flowId,
+  });
+}
+
 export function useFlowExecutions(params?: { state?: string; flow?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.state) searchParams.set("state", params.state);
