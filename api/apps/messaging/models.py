@@ -131,3 +131,51 @@ class MessageLog(models.Model):
             models.Index(fields=["status", "channel"]),
             models.Index(fields=["template_code", "-created_at"]),
         ]
+
+
+class WebhookEvent(models.Model):
+    """
+    Trilha de auditoria de cada webhook recebido de um provider.
+
+    Criado imediatamente ao receber o POST, antes de qualquer processamento.
+    Permite retry de falhas, debugging e histórico completo por mensagem.
+    """
+
+    STATUS_CHOICES = [
+        ("pending",   "Pending"),
+        ("processed", "Processed"),
+        ("failed",    "Failed"),
+        ("ignored",   "Ignored"),
+    ]
+
+    provider = models.ForeignKey(
+        ProviderConfig,
+        on_delete=models.PROTECT,
+        related_name="webhook_events",
+    )
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    headers = models.JSONField(default=dict)
+    payload = models.JSONField()
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
+    )
+    message_log = models.ForeignKey(
+        MessageLog,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="webhook_events",
+    )
+    error_message = models.TextField(blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["provider", "-received_at"]),
+            models.Index(fields=["status", "-received_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"WebhookEvent #{self.pk} [{self.status}] {self.provider}"

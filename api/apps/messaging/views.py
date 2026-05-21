@@ -1,9 +1,10 @@
-"""Views do messaging: webhooks reversos dos providers."""
+"""Views do messaging: webhooks reversos dos providers e stats."""
 
 import logging
+from datetime import datetime, time, timedelta
 
+from django.db.models import Count, Q
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import (
     api_view,
@@ -13,8 +14,26 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import MessageLog, ProviderConfig
+from .models import MessageLog, ProviderConfig, WebhookEvent
 from .providers import get_provider
+
+logger = logging.getLogger(__name__)
+
+# Headers HTTP que preservamos no WebhookEvent (filtramos auth/cookies)
+_SAFE_HEADER_PREFIXES = ("X-", "Content-Type", "User-Agent")
+
+
+def _extract_safe_headers(meta: dict) -> dict[str, str]:
+    """Converte META do Django em dict de headers sem dados sensíveis."""
+    result = {}
+    for key, value in meta.items():
+        if key.startswith("HTTP_"):
+            header = key[5:].replace("_", "-").title()
+            if any(header.startswith(p) for p in _SAFE_HEADER_PREFIXES):
+                result[header] = str(value)
+        elif key == "CONTENT_TYPE":
+            result["Content-Type"] = str(value)
+    return result
 
 
 class ProviderConfigSerializer(serializers.ModelSerializer):
@@ -64,69 +83,115 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["channel", "status"]
     search_fields = ["profile__external_id", "template_code", "recipient"]
 
-logger = logging.getLogger(__name__)
-
 
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def provider_webhook(request, provider_id: int):
     """
-    Recebe webhooks de retorno de providers (delivered, opened, bounced).
+    Recebe webhooks de retorno de providers (delivered, opened, bounced, clicked...).
 
     POST /api/v1/messaging/webhooks/<provider_id>
 
-    Cada provider tem seu próprio formato, parseado pelo método parse_webhook.
+    Fluxo:
+    1. Verifica assinatura HMAC (se configurada no provider)
+    2. Cria WebhookEvent como trilha de auditoria imutável
+    3. Despacha processamento assíncrono via Celery
+    4. Retorna 200 imediatamente para evitar retry do provider
     """
     try:
         config = ProviderConfig.objects.get(id=provider_id, is_active=True)
     except ProviderConfig.DoesNotExist:
         return Response({"error": "provider_not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-    try:
-        provider = get_provider(config.provider_class, config.config)
-        parsed = provider.parse_webhook(request.data)
-    except Exception as e:
-        logger.exception("Webhook parse error")
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    provider = get_provider(config.provider_class, config.config)
 
-    if not parsed:
-        return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+    # Verificação de assinatura antes de qualquer processamento
+    raw_body = request.body
+    headers = _extract_safe_headers(request.META)
 
-    # Atualiza MessageLog
-    log = MessageLog.objects.filter(
-        external_message_id=parsed["external_message_id"],
-        provider=config,
-    ).first()
-
-    if not log:
+    if not provider.verify_webhook_signature(headers, raw_body):
         logger.warning(
-            "Webhook for unknown message_id=%s, provider=%s",
-            parsed["external_message_id"],
+            "Webhook signature verification failed: provider=%s ip=%s",
             config.name,
+            request.META.get("REMOTE_ADDR"),
         )
-        return Response({"status": "unknown_message"}, status=status.HTTP_200_OK)
+        return Response({"error": "invalid_signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
-    new_status = parsed["status"]
-    log.status = new_status
+    # Persiste o evento antes de qualquer processamento (audit trail)
+    event = WebhookEvent.objects.create(
+        provider=config,
+        headers=headers,
+        payload=request.data,
+    )
+
+    # Processa de forma assíncrona
+    from .tasks import process_webhook_event
+    process_webhook_event.delay(event.id)
+
+    return Response({"status": "accepted", "event_id": event.id}, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def messaging_stats(request):
+    """
+    Retorna métricas de mensageria para o dashboard.
+
+    GET /api/v1/messaging/stats/?channel=email
+
+    - sent_today / delivered_today / opened_today / clicked_today:
+      contagens do dia corrente (UTC) por timestamp do evento
+    - delivery_rate / open_rate / click_rate:
+      taxas calculadas sobre os últimos 7 dias (volume suficiente para média estável)
+    """
+    channel = request.query_params.get("channel")
+    try:
+        days = max(1, min(int(request.query_params.get("days", 7)), 365))
+    except (ValueError, TypeError):
+        days = 7
 
     now = timezone.now()
-    field_map = {
-        "delivered": "delivered_at",
-        "opened": "opened_at",
-        "clicked": "clicked_at",
-        "bounced": "bounced_at",
-    }
-    if field_name := field_map.get(new_status):
-        setattr(log, field_name, now)
+    today = now.date()
+    period_start = now - timedelta(days=days)
 
-    log.raw_response = {**(log.raw_response or {}), "webhook": parsed["raw"]}
-    log.save()
+    def _base_qs():
+        qs = MessageLog.objects.all()
+        if channel:
+            qs = qs.filter(channel=channel)
+        return qs
 
-    # Triggers especiais: complained / bounced => suspender canal pro usuário
-    if new_status in ("complained", "bounced"):
-        from apps.profiles.tasks import handle_negative_signal
+    # Contagens do dia corrente
+    day_agg = _base_qs().aggregate(
+        sent_today=Count("id", filter=Q(sent_at__date=today)),
+        delivered_today=Count("id", filter=Q(delivered_at__date=today)),
+        opened_today=Count("id", filter=Q(opened_at__date=today)),
+        clicked_today=Count("id", filter=Q(clicked_at__date=today)),
+    )
 
-        handle_negative_signal.delay(log.profile_id, log.channel, new_status)
+    # Taxas no período selecionado
+    period_agg = _base_qs().filter(sent_at__gte=period_start).aggregate(
+        total_sent=Count("id"),
+        total_delivered=Count("id", filter=Q(delivered_at__isnull=False)),
+        total_opened=Count("id", filter=Q(opened_at__isnull=False)),
+        total_clicked=Count("id", filter=Q(clicked_at__isnull=False)),
+    )
 
-    return Response({"status": "processed"}, status=status.HTTP_200_OK)
+    total_sent      = period_agg["total_sent"] or 0
+    total_delivered = period_agg["total_delivered"] or 0
+    total_opened    = period_agg["total_opened"] or 0
+    total_clicked   = period_agg["total_clicked"] or 0
+
+    def rate(numerator: int, denominator: int) -> float:
+        return round(numerator / denominator * 100, 1) if denominator else 0.0
+
+    return Response({
+        "sent_today":      day_agg["sent_today"],
+        "delivered_today": day_agg["delivered_today"],
+        "opened_today":    day_agg["opened_today"],
+        "clicked_today":   day_agg["clicked_today"],
+        "delivery_rate":   rate(total_delivered, total_sent),
+        "open_rate":       rate(total_opened, total_delivered),
+        "click_rate":      rate(total_clicked, total_opened),
+        "period_days":     days,
+    })

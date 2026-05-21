@@ -1,5 +1,8 @@
 """Provider: Mailgun (fallback)."""
 
+import hashlib
+import hmac
+import json
 import logging
 
 import requests
@@ -77,6 +80,30 @@ class MailgunEmailProvider(BaseProvider):
                 error=f"{e}: {error_detail}",
                 raw_response={"error": str(e), "detail": error_detail},
             )
+
+    def verify_webhook_signature(self, headers: dict[str, str], raw_body: bytes) -> bool:
+        """
+        Mailgun inclui objeto `signature` no próprio payload JSON:
+        { "signature": { "timestamp": "...", "token": "...", "signature": "..." } }
+        Verificação: HMAC-SHA256(signing_key, timestamp+token) == signature.
+        Se webhook_signing_key não configurado, aceita sem verificar.
+        """
+        signing_key = self.config.get("webhook_signing_key")
+        if not signing_key:
+            return True
+        try:
+            sig_data = json.loads(raw_body).get("signature", {})
+            timestamp = sig_data.get("timestamp", "")
+            token     = sig_data.get("token", "")
+            signature = sig_data.get("signature", "")
+            expected = hmac.new(
+                signing_key.encode(),
+                f"{timestamp}{token}".encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            return hmac.compare_digest(signature, expected)
+        except Exception:
+            return False
 
     def parse_webhook(self, payload: dict) -> dict | None:
         """

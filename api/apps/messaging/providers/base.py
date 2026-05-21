@@ -45,10 +45,18 @@ class BaseProvider(ABC):
     def send(self, recipient: str, content: MessageContent, **kwargs) -> SendResult:
         """Envia uma mensagem. Deve ser idempotente quando possível."""
 
+    def verify_webhook_signature(self, headers: dict[str, str], raw_body: bytes) -> bool:
+        """
+        Verifica assinatura HMAC do webhook.
+        Retorna True se válido ou se o provider não tiver secret configurado.
+        Override em providers que suportam assinatura (Postal, Mailgun).
+        """
+        return True
+
     def parse_webhook(self, payload: dict[str, Any]) -> dict[str, Any] | None:
         """
         Parsing de webhooks reversos do provider (delivered, opened, bounced).
-        Retorna dict com {external_message_id, status, timestamp} ou None.
+        Retorna dict com {external_message_id, status} ou None se evento irrelevante.
         Override por provider que suporta webhooks.
         """
         return None

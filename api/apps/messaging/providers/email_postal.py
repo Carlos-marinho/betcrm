@@ -1,6 +1,9 @@
 """Provider: Postal (MTA self-hosted)."""
 
+import hashlib
+import hmac
 import logging
+from base64 import b64encode
 
 import requests
 
@@ -80,6 +83,21 @@ class PostalEmailProvider(BaseProvider):
                 error=str(e),
                 raw_response={"error": str(e)},
             )
+
+    def verify_webhook_signature(self, headers: dict[str, str], raw_body: bytes) -> bool:
+        """
+        Postal assina o body com HMAC-SHA1 usando o webhook_secret configurado.
+        Assinatura enviada em: X-Postal-Signature (base64).
+        Se webhook_secret não configurado, aceita sem verificar (retrocompatível).
+        """
+        secret = self.config.get("webhook_secret")
+        if not secret:
+            return True
+        sig = headers.get("X-Postal-Signature", "")
+        expected = b64encode(
+            hmac.new(secret.encode(), raw_body, hashlib.sha1).digest()
+        ).decode()
+        return hmac.compare_digest(sig, expected)
 
     def parse_webhook(self, payload: dict) -> dict | None:
         """
