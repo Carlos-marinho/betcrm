@@ -185,48 +185,77 @@ def evaluate_scheduled_flows():
             continue
 
         logger.info("Fluxo agendado %s será executado agora", flow.code)
-        _enroll_scheduled_audience.delay(flow.id)
+
+        from .models import FlowScheduleRun
+        run = FlowScheduleRun.objects.create(flow=flow, run_at=now)
+
+        _enroll_scheduled_audience.delay(flow.id, run.id)
 
         flow.last_scheduled_run_at = now
         flow.save(update_fields=["last_scheduled_run_at"])
 
 
 @shared_task(time_limit=300)
-def _enroll_scheduled_audience(flow_id: int):
-    """Enrola o público-alvo de um fluxo agendado."""
+def _enroll_scheduled_audience(flow_id: int, schedule_run_id: int):
+    """Enrola o público-alvo de um fluxo agendado e atualiza o FlowScheduleRun."""
     from apps.profiles.models import Profile
     from apps.segments.engine import SegmentEngine
     from apps.segments.models import Segment
 
+    from .models import FlowScheduleRun
+
     try:
         flow = Flow.objects.get(id=flow_id)
-    except Flow.DoesNotExist:
+        run = FlowScheduleRun.objects.get(id=schedule_run_id)
+    except (Flow.DoesNotExist, FlowScheduleRun.DoesNotExist):
         return
 
     config = flow.schedule_config
     audience = config.get("audience", "all")
 
-    if audience == "segment":
-        segment_code = config.get("segment_code", "")
-        if not segment_code:
-            logger.warning("Fluxo %s: audience=segment mas sem segment_code", flow.code)
-            return
-        try:
-            segment = Segment.objects.get(code=segment_code, is_active=True)
-        except Segment.DoesNotExist:
-            logger.warning("Segmento %s não encontrado para fluxo %s", segment_code, flow.code)
-            return
-        try:
-            profiles = SegmentEngine.evaluate(segment.rules).only("id")
-        except Exception:
-            logger.exception("Erro ao avaliar segmento %s para fluxo %s", segment_code, flow.code)
-            return
-    else:
-        # audience = "all" — todos os perfis ativos com consentimento (pelo menos 1 canal)
-        profiles = Profile.objects.filter(is_deleted=False).only("id")
+    try:
+        if audience == "segment":
+            segment_code = config.get("segment_code", "")
+            if not segment_code:
+                logger.warning("Fluxo %s: audience=segment mas sem segment_code", flow.code)
+                run.status = "failed"
+                run.error_message = "segment_code ausente no schedule_config"
+                run.save(update_fields=["status", "error_message"])
+                return
+            try:
+                segment = Segment.objects.get(code=segment_code, is_active=True)
+            except Segment.DoesNotExist:
+                logger.warning("Segmento %s não encontrado para fluxo %s", segment_code, flow.code)
+                run.status = "failed"
+                run.error_message = f"Segmento '{segment_code}' não encontrado ou inativo"
+                run.save(update_fields=["status", "error_message"])
+                return
+            try:
+                profiles = SegmentEngine.evaluate(segment.rules).only("id")
+            except Exception as exc:
+                logger.exception("Erro ao avaliar segmento %s para fluxo %s", segment_code, flow.code)
+                run.status = "failed"
+                run.error_message = str(exc)
+                run.save(update_fields=["status", "error_message"])
+                return
+        else:
+            profiles = Profile.objects.filter(is_deleted=False).only("id")
 
-    for profile in profiles.iterator(chunk_size=500):
-        _try_enroll(flow, profile.id, event_id=None)
+        enrolled = 0
+        for profile in profiles.iterator(chunk_size=500):
+            if _try_enroll(flow, profile.id, event_id=None, schedule_run_id=run.id):
+                enrolled += 1
+
+        run.status = "completed"
+        run.enrolled_count = enrolled
+        run.save(update_fields=["status", "enrolled_count"])
+        logger.info("Fluxo %s: %d perfis enrolados neste disparo", flow.code, enrolled)
+
+    except Exception as exc:
+        logger.exception("Erro inesperado em _enroll_scheduled_audience para fluxo %s", flow.code)
+        run.status = "failed"
+        run.error_message = str(exc)
+        run.save(update_fields=["status", "error_message"])
 
 
 def _should_run_scheduled_flow(flow: Flow, now: timezone.datetime) -> bool:
@@ -323,14 +352,22 @@ def _should_run_scheduled_flow(flow: Flow, now: timezone.datetime) -> bool:
     return False
 
 
-def _try_enroll(flow: Flow, profile_id: int, event_id: int | None):
-    """Tenta enrolar profile no fluxo (respeita allow_reentry e cooldown)."""
+def _try_enroll(
+    flow: Flow,
+    profile_id: int,
+    event_id: int | None,
+    schedule_run_id: int | None = None,
+) -> bool:
+    """
+    Tenta enrolar profile no fluxo (respeita allow_reentry e cooldown).
+    Retorna True se enrolou, False se ignorado.
+    """
     # Já tem execução ativa?
     active = FlowExecution.objects.filter(
         flow=flow, profile_id=profile_id, state="active"
     ).exists()
     if active:
-        return
+        return False
 
     # Verifica reentrada
     if not flow.allow_reentry:
@@ -338,7 +375,7 @@ def _try_enroll(flow: Flow, profile_id: int, event_id: int | None):
             flow=flow, profile_id=profile_id
         ).exclude(state="active").exists()
         if completed:
-            return
+            return False
     else:
         from datetime import timedelta
 
@@ -349,7 +386,7 @@ def _try_enroll(flow: Flow, profile_id: int, event_id: int | None):
             completed_at__gte=cooldown_cutoff,
         ).exists()
         if recent:
-            return
+            return False
 
     # Cria execução
     FlowExecution.objects.create(
@@ -358,8 +395,10 @@ def _try_enroll(flow: Flow, profile_id: int, event_id: int | None):
         current_node_id="start",
         next_run_at=timezone.now(),
         trigger_event_id=event_id,
+        schedule_run_id=schedule_run_id,
         state="active",
     )
 
     flow.total_enrolled = (flow.total_enrolled or 0) + 1
     flow.save(update_fields=["total_enrolled"])
+    return True

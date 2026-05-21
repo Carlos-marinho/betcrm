@@ -6,6 +6,7 @@ delays, condições e ações (envio de mensagem, atualização de tag, etc).
 
 Estrutura:
 - Flow: definição da jornada (template)
+- FlowScheduleRun: auditoria de cada disparo de fluxo agendado
 - FlowExecution: instância em execução por profile
 """
 
@@ -72,6 +73,38 @@ class Flow(TimeStampedModel):
         return f"{self.name} ({'active' if self.is_active else 'inactive'})"
 
 
+class FlowScheduleRun(models.Model):
+    """
+    Auditoria de cada disparo de um fluxo agendado.
+
+    Criado quando evaluate_scheduled_flows decide rodar um fluxo.
+    Permite responder: "quando rodou, quantos foram alcançados, deu certo?"
+    Também é o elo para queries de atribuição:
+      FlowScheduleRun → FlowExecution → MessageLog → Event
+    """
+
+    STATUS_CHOICES = [
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    ]
+
+    flow = models.ForeignKey(Flow, on_delete=models.CASCADE, related_name="schedule_runs")
+    run_at = models.DateTimeField(db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running", db_index=True)
+    enrolled_count = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-run_at"]
+        indexes = [
+            models.Index(fields=["flow", "-run_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.flow.code} @ {self.run_at:%Y-%m-%d %H:%M} ({self.status})"
+
+
 class FlowExecution(models.Model):
     """Instância de fluxo em execução para um profile."""
 
@@ -86,6 +119,16 @@ class FlowExecution(models.Model):
     flow = models.ForeignKey(Flow, on_delete=models.CASCADE, related_name="executions")
     profile = models.ForeignKey(
         "profiles.Profile", on_delete=models.CASCADE, related_name="flow_executions"
+    )
+
+    # Disparo agendado que originou esta execução (null para event/segment flows)
+    schedule_run = models.ForeignKey(
+        FlowScheduleRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="executions",
+        db_index=True,
     )
 
     state = models.CharField(

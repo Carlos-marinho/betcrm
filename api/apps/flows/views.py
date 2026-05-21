@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Flow, FlowExecution
+from .models import Flow, FlowExecution, FlowScheduleRun
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,12 @@ class FlowSerializer(serializers.ModelSerializer):
     class Meta:
         model = Flow
         fields = "__all__"
+
+
+class FlowScheduleRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FlowScheduleRun
+        fields = ["id", "flow", "run_at", "status", "enrolled_count", "error_message"]
 
 
 class FlowExecutionSerializer(serializers.ModelSerializer):
@@ -207,6 +213,12 @@ class FlowViewSet(viewsets.ModelViewSet):
         flow = self.get_object()
         execs = flow.executions.order_by("-started_at")[:100]
         return Response(FlowExecutionSerializer(execs, many=True).data)
+
+    @action(detail=True, methods=["get"], url_path="schedule_runs")
+    def schedule_runs(self, request, pk=None):
+        flow = self.get_object()
+        runs = flow.schedule_runs.order_by("-run_at")[:50]
+        return Response(FlowScheduleRunSerializer(runs, many=True).data)
 
 
 class FlowExecutionViewSet(viewsets.ReadOnlyModelViewSet):
