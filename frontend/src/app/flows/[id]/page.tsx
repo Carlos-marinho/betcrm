@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   LayoutGrid,
+  ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -66,6 +67,12 @@ export default function FlowEditorPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [rightOpen, setRightOpen] = useState(true);
+
+  // Re-open config panel whenever a node is selected
+  useEffect(() => {
+    if (selectedNodeId) setRightOpen(true);
+  }, [selectedNodeId]);
 
   // Init canvas from flow definition
   useEffect(() => {
@@ -297,17 +304,66 @@ export default function FlowEditorPage() {
           />
         </div>
 
-        {/* Right config panel */}
+        {/* Right config panel — collapsible, toggle strip on left edge */}
         {selectedNode && (
           <div
-            className="w-64 shrink-0 overflow-hidden"
-            style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}
+            className="shrink-0"
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              width: rightOpen ? 384 : 32,
+              transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
+              overflow: "hidden",
+              borderLeft: "1px solid rgba(255,255,255,0.07)",
+              background: "#080B16",
+            }}
           >
-            <NodeConfigPanel
-              node={selectedNode}
-              onChange={handleNodeUpdate}
-              onClose={() => setSelectedNodeId(null)}
-            />
+            {/* Toggle strip — always visible at the left edge */}
+            <button
+              onClick={() => setRightOpen((v) => !v)}
+              title={rightOpen ? "Recolher painel" : "Expandir painel"}
+              style={{
+                width: 32,
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "rgba(255,255,255,0.2)",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.2)";
+              }}
+            >
+              {rightOpen
+                ? <ChevronRight style={{ width: 12, height: 12 }} />
+                : <ChevronLeft style={{ width: 12, height: 12 }} />
+              }
+            </button>
+
+            {/* Panel content — fades out before overflow clips it */}
+            <div
+              style={{
+                width: 352,
+                flexShrink: 0,
+                overflow: "hidden",
+                opacity: rightOpen ? 1 : 0,
+                transition: "opacity 0.12s ease",
+                pointerEvents: rightOpen ? "auto" : "none",
+                borderLeft: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <NodeConfigPanel
+                node={selectedNode}
+                onChange={handleNodeUpdate}
+                onClose={() => setSelectedNodeId(null)}
+              />
+            </div>
           </div>
         )}
       </div>

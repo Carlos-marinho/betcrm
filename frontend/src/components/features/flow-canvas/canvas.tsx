@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   FlowNode,
   Connection,
@@ -306,15 +307,69 @@ export function FlowCanvas({
     }
   }, [nodes, fitView]);
 
+  const [leftOpen, setLeftOpen] = useState(true);
+
   const connectingNode = connectingFrom
     ? nodes.find((n) => n.id === connectingFrom.nodeId)
     : null;
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left palette */}
-      <div className="w-36 shrink-0 overflow-y-auto">
-        <NodePalette onAddNode={handleAddNode} />
+      {/* Left palette — collapsible, row-reverse so toggle stays visible on collapse */}
+      <div
+        className="shrink-0"
+        style={{
+          display: "flex",
+          flexDirection: "row-reverse",
+          width: leftOpen ? 208 : 32,
+          transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
+          overflow: "hidden",
+          background: "#080B16",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        {/* Toggle strip — first in DOM, visually on the right via row-reverse */}
+        <button
+          onClick={() => setLeftOpen((v) => !v)}
+          title={leftOpen ? "Recolher painel" : "Expandir painel"}
+          style={{
+            width: 32,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            color: "rgba(255,255,255,0.2)",
+            background: "transparent",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.2)";
+          }}
+        >
+          {leftOpen
+            ? <ChevronLeft style={{ width: 12, height: 12 }} />
+            : <ChevronRight style={{ width: 12, height: 12 }} />
+          }
+        </button>
+
+        {/* Palette content — fades out before width collapse clips it */}
+        <div
+          style={{
+            width: 176,
+            flexShrink: 0,
+            overflowY: "auto",
+            height: "100%",
+            opacity: leftOpen ? 1 : 0,
+            transition: "opacity 0.12s ease",
+            pointerEvents: leftOpen ? "auto" : "none",
+          }}
+        >
+          <NodePalette onAddNode={handleAddNode} />
+        </div>
       </div>
 
       {/* Canvas area */}
