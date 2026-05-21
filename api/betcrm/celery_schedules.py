@@ -17,6 +17,11 @@ CELERY_BEAT_SCHEDULE_DEFAULTS = {
         "task": "apps.flows.tasks.evaluate_segment_entry_flows",
         "schedule": timedelta(minutes=5),
     },
+    # Avalia e dispara fluxos agendados (scheduled)
+    "evaluate-scheduled-flows": {
+        "task": "apps.flows.tasks.evaluate_scheduled_flows",
+        "schedule": timedelta(minutes=1),
+    },
     # Verifica reputação a cada 6 horas
     "check-reputation": {
         "task": "apps.messaging.tasks.scheduled_reputation_check",

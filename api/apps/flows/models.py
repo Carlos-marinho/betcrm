@@ -49,6 +49,17 @@ class Flow(TimeStampedModel):
     # Goal: se o usuário disparar este evento, sai do fluxo (sucesso)
     goal_event_code = models.CharField(max_length=100, blank=True, db_index=True)
 
+    # Agenda (somente para trigger_type="scheduled")
+    schedule_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Ex: {"recurrence": "daily", "time": "09:00", '
+            '"timezone": "America/Sao_Paulo", "audience": "all"}'
+        ),
+    )
+    last_scheduled_run_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     # Stats
     total_enrolled = models.IntegerField(default=0)
     total_completed = models.IntegerField(default=0)
