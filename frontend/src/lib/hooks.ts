@@ -362,6 +362,34 @@ export interface MessageLog {
   created_at: string;
 }
 
+export interface MessagingStats {
+  sent_today: number;
+  delivered_today: number;
+  opened_today: number;
+  clicked_today: number;
+  delivery_rate: number;
+  open_rate: number;
+  click_rate: number;
+  period_days: number;
+}
+
+export function useMessagingStats(params?: { channel?: string; days?: number }) {
+  const channel = params?.channel;
+  const days = params?.days ?? 7;
+
+  return useQuery<MessagingStats>({
+    queryKey: ["messaging-stats", channel ?? "", days],
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      if (channel) qs.set("channel", channel);
+      qs.set("days", String(days));
+      const { data } = await api.get(`/messaging/stats/?${qs.toString()}`);
+      return data;
+    },
+    refetchInterval: 30_000,
+  });
+}
+
 export function useMessageLogs(params?: { channel?: string; status?: string; page?: number }) {
   const searchParams = new URLSearchParams();
   if (params?.channel) searchParams.set("channel", params.channel);

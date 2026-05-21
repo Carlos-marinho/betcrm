@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { DashboardShell } from "@/components/dashboard/shell";
-import { useMessageLogs } from "@/lib/hooks";
+import { useMessageLogs, useMessagingStats } from "@/lib/hooks";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
@@ -57,17 +57,28 @@ const STATUS_CONFIG: Record<string, { badge: string; icon: React.ElementType; la
   rejected:     { badge: "badge-muted",  icon: XCircle,           label: "Rejeitada" },
 };
 
-const STAT_CARDS = [
-  { label: "Enviadas hoje", icon: Activity, value: "—", accent: "text-muted-foreground" },
-  { label: "Entregues", icon: CheckCircle2, value: "—", accent: "text-teal" },
-  { label: "Abertas", icon: MailOpen, value: "—", accent: "text-gold" },
-  { label: "Clicadas", icon: MousePointerClick, value: "—", accent: "text-gold" },
+function fmtN(n: number | undefined): string {
+  if (n === undefined) return "—";
+  return n.toLocaleString("pt-BR");
+}
+
+function fmtRate(r: number | undefined): string | null {
+  if (r === undefined || r === 0) return null;
+  return `${r.toFixed(1)}%`;
+}
+
+const PERIOD_OPTIONS = [
+  { value: 1,  label: "Hoje" },
+  { value: 7,  label: "7 dias" },
+  { value: 14, label: "14 dias" },
+  { value: 30, label: "30 dias" },
 ];
 
 export default function MessagesPage() {
   const [channelFilter, setChannelFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [statsDays, setStatsDays] = useState(7);
 
   const { data, isLoading } = useMessageLogs({
     channel: channelFilter || undefined,
@@ -75,7 +86,45 @@ export default function MessagesPage() {
     page,
   });
 
+  const { data: stats, isLoading: statsLoading } = useMessagingStats({
+    channel: channelFilter || undefined,
+    days: statsDays,
+  });
+
   const totalPages = data ? Math.ceil(data.count / 20) : 1;
+
+  const periodLabel = PERIOD_OPTIONS.find((o) => o.value === statsDays)?.label ?? `${statsDays}d`;
+
+  const statCards = [
+    {
+      label: "Enviadas hoje",
+      icon: Activity,
+      value: fmtN(stats?.sent_today),
+      sub: null,
+      accent: "text-muted-foreground",
+    },
+    {
+      label: "Entregues hoje",
+      icon: CheckCircle2,
+      value: fmtN(stats?.delivered_today),
+      sub: fmtRate(stats?.delivery_rate),
+      accent: "text-teal",
+    },
+    {
+      label: "Abertas hoje",
+      icon: MailOpen,
+      value: fmtN(stats?.opened_today),
+      sub: fmtRate(stats?.open_rate),
+      accent: "text-gold",
+    },
+    {
+      label: "Clicadas hoje",
+      icon: MousePointerClick,
+      value: fmtN(stats?.clicked_today),
+      sub: fmtRate(stats?.click_rate),
+      accent: "text-gold",
+    },
+  ];
 
   return (
     <DashboardShell>
@@ -88,24 +137,51 @@ export default function MessagesPage() {
               {data ? `${data.count.toLocaleString("pt-BR")} mensagens no período` : "Carregando..."}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-teal">
-            <span className="live-dot" />
-            atualiza a cada 30s
+          <div className="flex items-center gap-3">
+            {/* Seletor de período das métricas */}
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setStatsDays(opt.value)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                    statsDays === opt.value
+                      ? "bg-white/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-teal">
+              <span className="live-dot" />
+              atualiza a cada 30s
+            </div>
           </div>
         </div>
 
         {/* Stats strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {STAT_CARDS.map((stat) => {
+          {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
               <div key={stat.label} className="card-vault p-4 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
                   <Icon className={`w-4 h-4 ${stat.accent}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="font-data text-lg font-semibold text-foreground">{stat.value}</p>
+                  {statsLoading ? (
+                    <div className="h-5 w-16 shimmer-bg rounded mt-0.5" />
+                  ) : (
+                    <p className="font-data text-lg font-semibold text-foreground leading-tight">
+                      {stat.value}
+                    </p>
+                  )}
+                  {!statsLoading && stat.sub && (
+                    <p className={`text-xs font-data ${stat.accent} opacity-70`}>{stat.sub} ({periodLabel})</p>
+                  )}
                 </div>
               </div>
             );
