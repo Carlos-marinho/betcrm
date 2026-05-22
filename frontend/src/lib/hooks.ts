@@ -148,15 +148,27 @@ export function useFlows() {
   });
 }
 
+export function useFlow(id: number | null) {
+  return useQuery<Flow>({
+    queryKey: ["flows", id],
+    queryFn: async () => {
+      const { data } = await api.get(`/flows/${id}/`);
+      return data;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useToggleFlow() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, activate }: { id: number; activate: boolean }) => {
       const { data } = await api.post(`/flows/${id}/${activate ? "activate" : "deactivate"}/`);
-      return data;
+      return data as Flow;
     },
-    onSuccess: () => {
+    onSuccess: (flow) => {
       queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.invalidateQueries({ queryKey: ["flows", flow.id] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
     },
   });
@@ -189,6 +201,20 @@ export function useSegments() {
 
 // ── Templates ─────────────────────────────────────────────────────────────────
 
+export interface EmailAsset {
+  id: number;
+  name: string;
+  folder: string;
+  file: string;
+  file_url: string;
+  asset_type: "banner" | "footer_logo" | "logo" | "general";
+  alt_text: string;
+  is_global_footer: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MessageTemplate {
   id: number;
   code: string;
@@ -198,6 +224,8 @@ export interface MessageTemplate {
   subject: string;
   body_html: string;
   body_text: string;
+  banner_asset: number | null;
+  banner_asset_url: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -328,8 +356,9 @@ export function useUpdateFlow() {
       const { data } = await api.patch(`/flows/${id}/`, payload);
       return data as Flow;
     },
-    onSuccess: () => {
+    onSuccess: (flow) => {
       queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.invalidateQueries({ queryKey: ["flows", flow.id] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
     },
   });
@@ -371,6 +400,73 @@ export function useDeleteTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] });
+    },
+  });
+}
+
+// ── Email Assets ──────────────────────────────────────────────────────────────
+
+export function useAssets(params?: { asset_type?: string; folder?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.asset_type) qs.set("asset_type", params.asset_type);
+  if (params?.folder) qs.set("folder", params.folder);
+  const q = qs.toString();
+
+  return useQuery<PaginatedResponse<EmailAsset>>({
+    queryKey: ["assets", q],
+    queryFn: async () => {
+      const { data } = await api.get(`/templates/assets/${q ? `?${q}` : ""}`);
+      return data;
+    },
+  });
+}
+
+export function useAssetFolders() {
+  return useQuery<string[]>({
+    queryKey: ["assets", "folders"],
+    queryFn: async () => {
+      const { data } = await api.get("/templates/assets/folders/");
+      return data;
+    },
+  });
+}
+
+export function useUploadAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (formData: FormData) => {
+      const { data } = await api.post("/templates/assets/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return data as EmailAsset;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/templates/assets/${id}/`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+}
+
+export function useSetGlobalFooterAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data } = await api.post(`/templates/assets/${id}/set_global_footer/`);
+      return data as EmailAsset;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
     },
   });
 }
@@ -613,8 +709,31 @@ export interface ProviderConfig {
   priority: number;
   daily_quota: number | null;
   monthly_quota: number | null;
+  tracking_enabled: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SendMessagePayload {
+  profile_id: number;
+  channel: "email" | "sms" | "push" | "whatsapp";
+  template_code: string;
+  context?: Record<string, unknown>;
+  bypass_quiet_hours?: boolean;
+  bypass_frequency_cap?: boolean;
+}
+
+export function useSendMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: SendMessagePayload) => {
+      const { data } = await api.post("/messaging/send/", payload);
+      return data as { status: string; message_id?: string; error?: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+    },
+  });
 }
 
 export function useProviders(channel?: string) {
@@ -709,6 +828,53 @@ export interface RecentEvent {
   user_external_id: string;
   occurred_at: string;
   amount: number | null;
+}
+
+export interface EventProfile {
+  id: number;
+  external_id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  tags: string[];
+  ltv: string;
+  total_deposits: string;
+  deposit_count: number;
+  is_active: boolean;
+  is_verified: boolean;
+  ftd_at: string | null;
+  last_login_at: string | null;
+}
+
+export interface EventDetail {
+  id: number;
+  event_type: number;
+  event_type_code: string;
+  event_type_name: string;
+  event_type_category: string;
+  event_type_priority: string;
+  external_event_id: string;
+  user_external_id: string;
+  payload: Record<string, unknown>;
+  occurred_at: string;
+  received_at: string;
+  processed: boolean;
+  processed_at: string | null;
+  processing_attempts: number;
+  last_error: string;
+  profile: EventProfile | null;
+}
+
+export function useEventDetail(id: number | null) {
+  return useQuery<EventDetail>({
+    queryKey: ["events", "detail", id],
+    queryFn: async () => {
+      const { data } = await api.get(`/events/${id}/`);
+      return data;
+    },
+    enabled: !!id,
+  });
 }
 
 export function useRecentEvents(params?: {
