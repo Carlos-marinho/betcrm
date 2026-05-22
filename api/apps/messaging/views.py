@@ -110,7 +110,10 @@ def send_message(request):
     Envia uma mensagem manual única para um perfil.
 
     POST /api/v1/messaging/send/
-    Body: { profile_id, channel, template_code, context?, bypass_quiet_hours?, bypass_frequency_cap? }
+    Body: {
+      profile_id, channel, template_code, context?, from_email?, from_name?,
+      bypass_quiet_hours?, bypass_frequency_cap?
+    }
     """
     profile_id = request.data.get("profile_id")
     channel = request.data.get("channel")
@@ -136,6 +139,8 @@ def send_message(request):
         template_code=template_code,
         context=request.data.get("context") or {},
         campaign_id="manual_send",
+        from_email=str(request.data.get("from_email") or "").strip(),
+        from_name=str(request.data.get("from_name") or "").strip(),
         bypass_quiet_hours=bool(request.data.get("bypass_quiet_hours", False)),
         bypass_frequency_cap=bool(request.data.get("bypass_frequency_cap", False)),
     )

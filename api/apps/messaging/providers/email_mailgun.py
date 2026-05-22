@@ -4,12 +4,26 @@ import hashlib
 import hmac
 import json
 import logging
+from email.utils import formataddr
 
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 import requests
 
 from .base import BaseProvider, MessageContent, SendResult
 
 logger = logging.getLogger(__name__)
+
+
+def _format_from_header(from_email: str, from_name: str = "") -> str:
+    from_email = str(from_email or "").strip()
+    validate_email(from_email)
+
+    from_name = str(from_name or "").strip()
+    if not from_name:
+        return from_email
+
+    return formataddr((from_name, from_email))
 
 
 class MailgunEmailProvider(BaseProvider):
@@ -36,7 +50,21 @@ class MailgunEmailProvider(BaseProvider):
 
         from_email = content.from_email or self.config.get("default_from_email", "")
         from_name = content.from_name or self.config.get("default_from_name", "")
-        from_header = f"{from_name} <{from_email}>" if from_name else from_email
+        try:
+            from_header = _format_from_header(from_email, from_name)
+        except ValidationError:
+            return SendResult(
+                success=False,
+                error=(
+                    "invalid_mailgun_from_email: configure default_from_email "
+                    "with a valid email address"
+                ),
+                raw_response={
+                    "error": "invalid_mailgun_from_email",
+                    "from_email": from_email,
+                    "default_from_email": self.config.get("default_from_email", ""),
+                },
+            )
 
         data = {
             "from": from_header,

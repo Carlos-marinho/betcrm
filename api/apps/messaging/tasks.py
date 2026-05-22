@@ -134,6 +134,8 @@ def send_message_task(
     context: dict | None = None,
     flow_execution_id: int | None = None,
     campaign_id: str = "",
+    from_email: str = "",
+    from_name: str = "",
     bypass_quiet_hours: bool = False,
     bypass_frequency_cap: bool = False,
 ):
@@ -152,6 +154,8 @@ def send_message_task(
         context=context,
         flow_execution_id=flow_execution_id,
         campaign_id=campaign_id,
+        from_email=from_email,
+        from_name=from_name,
         bypass_quiet_hours=bypass_quiet_hours,
         bypass_frequency_cap=bypass_frequency_cap,
     )

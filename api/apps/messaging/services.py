@@ -36,6 +36,8 @@ class MessagingService:
         context: dict | None = None,
         flow_execution_id: int | None = None,
         campaign_id: str = "",
+        from_email: str = "",
+        from_name: str = "",
         bypass_quiet_hours: bool = False,
         bypass_frequency_cap: bool = False,
     ) -> SendResult:
@@ -49,6 +51,8 @@ class MessagingService:
             context: variáveis extras para o template
             flow_execution_id: se vier de fluxo, ID da execução
             campaign_id: ID da campanha (tracking)
+            from_email: remetente opcional para sobrescrever template/provider
+            from_name: nome opcional do remetente
             bypass_quiet_hours: True só para mensagens transacionais críticas
             bypass_frequency_cap: True só para transacionais críticas
         """
@@ -81,6 +85,9 @@ class MessagingService:
             content.campaign_id = campaign_id
             content.template_code = template_code
             content.profile_id = profile.id
+            if channel == "email" and from_email:
+                content.from_email = from_email
+                content.from_name = from_name
         except Exception as e:
             logger.exception("Template render error: %s", template_code)
             self._log(profile, channel, template_code, "failed", str(e), flow_execution_id, campaign_id)
@@ -95,6 +102,9 @@ class MessagingService:
 
         if not providers:
             return SendResult(success=False, error=f"no_providers_for_channel_{channel}")
+
+        if channel == "email" and from_email and not self._is_allowed_from_email(providers, from_email):
+            return SendResult(success=False, error="from_email_not_registered")
 
         # 7. Tenta enviar com fallback
         last_result = None
@@ -177,6 +187,32 @@ class MessagingService:
 
     def _create_log(self, **kwargs) -> MessageLog:
         return MessageLog.objects.create(status="queued", **kwargs)
+
+    def _is_allowed_from_email(self, providers: list[ProviderConfig], from_email: str) -> bool:
+        selected = from_email.strip().lower()
+        for provider in providers:
+            config = provider.config or {}
+            default_email = str(
+                config.get("default_from_email") or config.get("from_email") or ""
+            ).strip()
+            domain = str(config.get("domain") or "").strip()
+            if not domain and "@" in default_email:
+                domain = default_email.rsplit("@", 1)[1]
+
+            allowed = {default_email.lower()} if default_email else set()
+            for item in config.get("from_addresses") or []:
+                if not isinstance(item, dict):
+                    continue
+                prefix = str(item.get("prefix") or "").strip()
+                if not prefix:
+                    continue
+                email = prefix if "@" in prefix or not domain else f"{prefix}@{domain}"
+                allowed.add(email.lower())
+
+            if selected in allowed:
+                return True
+
+        return False
 
     def _update_log(self, log: MessageLog, result: SendResult):
         log.external_message_id = result.message_id[:200]
