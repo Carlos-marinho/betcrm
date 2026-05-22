@@ -196,14 +196,27 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["get"])
     def timeline(self, request, id=None):
-        """Timeline de eventos e mensagens do profile."""
+        """Timeline unificada: eventos, mensagens e atividades CRM do profile."""
         from apps.events.models import Event
         from apps.messaging.models import MessageLog
+
+        from .models import ProfileActivity
 
         profile = self.get_object()
 
         events = Event.objects.filter(user_external_id=profile.external_id).order_by("-occurred_at")[:50]
         messages = MessageLog.objects.filter(profile=profile).order_by("-created_at")[:50]
+        activities = (
+            ProfileActivity.objects.filter(
+                profile=profile,
+                kind__in=[
+                    ProfileActivity.KIND_TAG_CHANGE,
+                    ProfileActivity.KIND_FLOW_ENTRY,
+                    ProfileActivity.KIND_FLOW_EXIT,
+                ],
+            )
+            .order_by("-occurred_at")[:100]
+        )
 
         return Response(
             {
@@ -223,10 +236,20 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
                         "template": m.template_code,
                         "status": m.status,
                         "sent_at": m.sent_at,
+                        "created_at": m.created_at,
                         "opened_at": m.opened_at,
                         "clicked_at": m.clicked_at,
                     }
                     for m in messages
+                ],
+                "activities": [
+                    {
+                        "id": a.id,
+                        "kind": a.kind,
+                        "occurred_at": a.occurred_at,
+                        "data": a.data,
+                    }
+                    for a in activities
                 ],
             }
         )

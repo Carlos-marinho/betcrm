@@ -86,10 +86,10 @@ class Profile(TimeStampedModel, SoftDeleteModel):
     custom_attributes = models.JSONField(default=dict, blank=True)
 
     # ---------- Consentimentos LGPD ----------
-    consent_email = models.BooleanField(default=False)
-    consent_sms = models.BooleanField(default=False)
-    consent_push = models.BooleanField(default=False)
-    consent_whatsapp = models.BooleanField(default=False)
+    consent_email = models.BooleanField(default=True)
+    consent_sms = models.BooleanField(default=True)
+    consent_push = models.BooleanField(default=True)
+    consent_whatsapp = models.BooleanField(default=True)
 
     # ---------- Estado de comunicação ----------
     # Se passar de N bounces/complaints, desativar canal automaticamente
@@ -137,3 +137,43 @@ class Profile(TimeStampedModel, SoftDeleteModel):
     def remove_tag(self, tag: str):
         if self.has_tag(tag):
             self.tags = [t for t in self.tags if t != tag]
+
+
+class ProfileActivity(models.Model):
+    """
+    Log imutável de atividades CRM relevantes de um perfil.
+
+    Captura mudanças de tag e entradas/saídas de fluxos —
+    informações que não existem em outros models.
+    Eventos de plataforma e mensagens têm seus próprios logs.
+    """
+
+    KIND_TAG_CHANGE = "tag_change"
+    KIND_FLOW_ENTRY = "flow_entry"
+    KIND_FLOW_EXIT = "flow_exit"
+
+    KIND_CHOICES = [
+        (KIND_TAG_CHANGE, "Mudança de tag"),
+        (KIND_FLOW_ENTRY, "Entrou em fluxo"),
+        (KIND_FLOW_EXIT, "Saiu de fluxo"),
+    ]
+
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="activities")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, db_index=True)
+    occurred_at = models.DateTimeField(db_index=True)
+
+    # Payload livre por tipo:
+    # tag_change:  {"added": ["VIP_PRATA"], "removed": ["VIP_BRONZE"]}
+    # flow_entry:  {"flow_code": "welcome", "flow_name": "Boas-Vindas", "trigger": "event"}
+    # flow_exit:   {"flow_code": "welcome", "flow_name": "…", "state": "completed", "duration_hours": 4.5}
+    data = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-occurred_at"]
+        indexes = [
+            models.Index(fields=["profile", "-occurred_at"], name="profiles_pa_prof_occ_idx"),
+            models.Index(fields=["profile", "kind", "-occurred_at"], name="profiles_pa_prof_kind_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind} @ {self.profile.external_id} {self.occurred_at:%Y-%m-%d %H:%M}"

@@ -117,7 +117,9 @@ def upsert_profile_from_event(event) -> int:
         if not profile.ftd_at:
             profile.ftd_at = event.occurred_at
             profile.add_tag("FTD")
-        updated_fields += ["total_deposits", "deposit_count", "last_deposit_at", "ftd_at", "tags"]
+            updated_fields += ["total_deposits", "deposit_count", "last_deposit_at", "ftd_at", "tags"]
+        else:
+            updated_fields += ["total_deposits", "deposit_count", "last_deposit_at"]
 
     # Depósito falhou
     if code == "payment.deposit.failed":
@@ -209,11 +211,17 @@ def recalculate_profile_tags(profile_id: int):
         return
 
     now = timezone.now()
-    tags = set(profile.tags or [])
+    before_tags = set(profile.tags or [])
+    tags = set(before_tags)
 
-    # FTD
+    # FTD / RECORRENTE — mutuamente exclusivos
+    tags.discard("FTD")
+    tags.discard("RECORRENTE")
     if profile.ftd_at:
-        tags.add("FTD")
+        if (profile.deposit_count or 0) > 1:
+            tags.add("RECORRENTE")
+        else:
+            tags.add("FTD")
 
     # VIP tiers (baseado em LTV)
     tags.discard("VIP_BRONZE")
@@ -295,6 +303,18 @@ def recalculate_profile_tags(profile_id: int):
 
     profile.tags = sorted(tags)
     profile.save(update_fields=["tags"])
+
+    # Log de mudanças de tag
+    added = sorted(tags - before_tags)
+    removed = sorted(before_tags - tags)
+    if added or removed:
+        from .models import ProfileActivity
+        ProfileActivity.objects.create(
+            profile=profile,
+            kind=ProfileActivity.KIND_TAG_CHANGE,
+            occurred_at=now,
+            data={"added": added, "removed": removed},
+        )
 
 
 @shared_task(time_limit=30)
