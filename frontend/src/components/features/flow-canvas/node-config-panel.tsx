@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Info, Plus, Trash2, Send, Zap, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { X, Info, Plus, Trash2, Send, Zap, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp, Search, Mail } from "lucide-react";
 import { api } from "@/lib/api";
 import { FlowNode, NODE_META } from "./types";
 
@@ -160,14 +160,21 @@ export function NodeConfigPanel({ node, onChange, onClose }: NodeConfigPanelProp
                 placeholder="Selecionar canal..."
               />
             </Field>
-            <Field label="Código do template">
-              <ConfigInput
+            {node.config.channel === "email" ? (
+              <EmailTemplatePicker
                 value={String(node.config.template_code ?? "")}
-                onChange={(v) => set("template_code", v)}
-                placeholder="ex: welcome_email_v1"
-                mono
+                onChange={(code) => set("template_code", code)}
               />
-            </Field>
+            ) : (
+              <Field label="Código do template">
+                <ConfigInput
+                  value={String(node.config.template_code ?? "")}
+                  onChange={(v) => set("template_code", v)}
+                  placeholder="ex: welcome_sms_v1"
+                  mono
+                />
+              </Field>
+            )}
             <div className="space-y-2.5">
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <CheckboxInput
@@ -815,6 +822,412 @@ function TestWebhookSection({
         />
       )}
     </>
+  );
+}
+
+// ── Email Template Picker ─────────────────────────────────────────────────────
+
+interface TemplateOption {
+  id: number;
+  code: string;
+  name: string;
+  subject: string;
+  description: string;
+  category: string;
+  from_name: string;
+  from_email: string;
+  html_body: string;
+  is_active: boolean;
+}
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  transactional: { bg: "rgba(59,130,246,0.12)", text: "#3B82F6", border: "rgba(59,130,246,0.25)" },
+  marketing: { bg: "rgba(240,165,0,0.12)", text: "#F0A500", border: "rgba(240,165,0,0.25)" },
+  system: { bg: "rgba(107,114,128,0.12)", text: "#9CA3AF", border: "rgba(107,114,128,0.25)" },
+};
+
+function EmailTemplatePicker({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!value) { setSelectedName(null); return; }
+    api.get(`/templates/?channel=email&search=${encodeURIComponent(value)}`)
+      .then(({ data }) => {
+        const results: TemplateOption[] = data.results ?? data;
+        const match = results.find((t) => t.code === value);
+        if (match) setSelectedName(match.name);
+      })
+      .catch(() => {});
+  }, [value]);
+
+  return (
+    <Field label="Template de email">
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-xs transition-all text-left"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          color: value ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(59,130,246,0.4)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)"; }}
+      >
+        <Mail className="w-3.5 h-3.5 shrink-0" style={{ color: value ? "#3B82F6" : "rgba(255,255,255,0.3)" }} />
+        <div className="flex-1 min-w-0">
+          {value ? (
+            <>
+              <div className="truncate font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
+                {selectedName ?? value}
+              </div>
+              <div className="font-mono text-[9px] truncate mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                {value}
+              </div>
+            </>
+          ) : (
+            <span>Selecionar template de email...</span>
+          )}
+        </div>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }} />
+      </button>
+
+      {open && (
+        <TemplatePickerModal
+          selected={value}
+          onSelect={(code, name) => { onChange(code); setSelectedName(name); setOpen(false); }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </Field>
+  );
+}
+
+function TemplatePickerModal({
+  selected,
+  onSelect,
+  onClose,
+}: {
+  selected: string;
+  onSelect: (code: string, name: string) => void;
+  onClose: () => void;
+}) {
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [activeId, setActiveId] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get("/templates/?channel=email&is_active=true&page_size=200")
+      .then(({ data }) => {
+        const results: TemplateOption[] = data.results ?? data;
+        setTemplates(results);
+        if (selected) {
+          const match = results.find((t) => t.code === selected);
+          if (match) setActiveId(match.id);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = templates.filter((t) => {
+    const q = search.toLowerCase();
+    return !q || t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q) || t.subject.toLowerCase().includes(q);
+  });
+
+  const activeTemplate = templates.find((t) => t.id === activeId) ?? null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-6"
+      style={{ background: "rgba(0,0,0,0.88)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+        style={{
+          background: "#080B16",
+          border: "1px solid rgba(255,255,255,0.09)",
+          maxWidth: 920,
+          maxHeight: "82vh",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)" }}
+            >
+              <Mail className="w-4 h-4" style={{ color: "#3B82F6" }} />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                Templates de Email
+              </h2>
+              <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.28)" }}>
+                {loading ? "Carregando..." : `${templates.length} template${templates.length !== 1 ? "s" : ""} disponível${templates.length !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)" }}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-5 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
+              style={{ color: "rgba(255,255,255,0.22)" }}
+            />
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome, código ou assunto..."
+              className="w-full rounded-lg pl-8 pr-3 py-2 text-xs outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.8)",
+              }}
+              onFocus={(e) => { e.target.style.borderColor = "rgba(59,130,246,0.35)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.08)"; }}
+            />
+          </div>
+        </div>
+
+        {/* Body: list + preview */}
+        <div className="flex flex-1 min-h-0">
+          {/* Left: template list */}
+          <div
+            className="w-72 shrink-0 overflow-y-auto"
+            style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: "rgba(59,130,246,0.5)" }} />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center px-4">
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.22)" }}>
+                  {search ? "Nenhum template encontrado." : "Nenhum template de email disponível."}
+                </p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-0.5">
+                {filtered.map((t) => {
+                  const isActive = t.id === activeId;
+                  const isSelected = t.code === selected;
+                  const catStyle = CATEGORY_COLORS[t.category] ?? CATEGORY_COLORS.system;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveId(t.id)}
+                      onDoubleClick={() => onSelect(t.code, t.name)}
+                      className="w-full text-left rounded-lg px-3 py-2.5 transition-all"
+                      style={{
+                        background: isActive ? "rgba(59,130,246,0.1)" : "transparent",
+                        border: `1px solid ${isActive ? "rgba(59,130,246,0.28)" : "transparent"}`,
+                      }}
+                      onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)"; }}
+                      onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span
+                          className="text-xs font-medium leading-tight flex-1 min-w-0 truncate"
+                          style={{ color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.65)" }}
+                        >
+                          {t.name}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isSelected && (
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#10B981" }} title="Template atual" />
+                          )}
+                          <span
+                            className="rounded text-[9px] font-medium px-1.5 py-0.5 whitespace-nowrap"
+                            style={{ background: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.border}` }}
+                          >
+                            {t.category}
+                          </span>
+                        </div>
+                      </div>
+                      {t.subject && (
+                        <p className="text-[10px] mt-1 truncate" style={{ color: "rgba(255,255,255,0.28)" }}>
+                          {t.subject}
+                        </p>
+                      )}
+                      <p className="text-[9px] font-mono mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.18)" }}>
+                        {t.code}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Right: preview */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {!activeTemplate ? (
+              <div className="flex flex-col items-center justify-center flex-1 gap-3">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <Mail className="w-7 h-7" style={{ color: "rgba(255,255,255,0.1)" }} />
+                </div>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
+                  Selecione um template para pré-visualizar
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col h-full">
+                {/* Metadata bar */}
+                <div
+                  className="px-5 py-3.5 shrink-0"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold truncate" style={{ color: "rgba(255,255,255,0.88)" }}>
+                        {activeTemplate.name}
+                      </h3>
+                      {activeTemplate.subject && (
+                        <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.42)" }}>
+                          <span style={{ color: "rgba(255,255,255,0.22)" }}>Assunto: </span>
+                          {activeTemplate.subject}
+                        </p>
+                      )}
+                      {(activeTemplate.from_name || activeTemplate.from_email) && (
+                        <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.22)" }}>
+                          De: {activeTemplate.from_name
+                            ? `${activeTemplate.from_name} <${activeTemplate.from_email}>`
+                            : activeTemplate.from_email}
+                        </p>
+                      )}
+                      {activeTemplate.description && (
+                        <p className="text-[10px] mt-1.5 line-clamp-2" style={{ color: "rgba(255,255,255,0.22)" }}>
+                          {activeTemplate.description}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => onSelect(activeTemplate.code, activeTemplate.name)}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all"
+                      style={{
+                        background: "rgba(59,130,246,0.15)",
+                        border: "1px solid rgba(59,130,246,0.3)",
+                        color: "#3B82F6",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.25)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.15)"; }}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Usar template
+                    </button>
+                  </div>
+                </div>
+
+                {/* HTML preview */}
+                <div className="flex-1 min-h-0 p-4">
+                  {activeTemplate.html_body ? (
+                    <div
+                      className="w-full h-full rounded-xl overflow-hidden"
+                      style={{ border: "1px solid rgba(255,255,255,0.07)", background: "#ffffff" }}
+                    >
+                      <EmailPreviewFrame html={activeTemplate.html_body} />
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full h-full rounded-xl flex items-center justify-center"
+                      style={{ border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+                    >
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
+                        Template sem body HTML
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailPreviewFrame({ html }: { html: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(1);
+  const [scale, setScale] = useState(1);
+  const IFRAME_W = 600;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      if (el.clientWidth > 0) {
+        const s = el.clientWidth / IFRAME_W;
+        setScale(s);
+        scaleRef.current = s;
+      }
+    };
+    measure();
+    const obs = new ResizeObserver(measure);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Forward wheel events from the overlay into the iframe's scroll
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      iframeRef.current?.contentWindow?.scrollBy(e.deltaX / scaleRef.current, e.deltaY / scaleRef.current);
+    };
+    overlay.addEventListener("wheel", handler, { passive: false });
+    return () => overlay.removeEventListener("wheel", handler);
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%", overflow: "hidden", position: "relative" }}>
+      <iframe
+        ref={iframeRef}
+        srcDoc={html}
+        sandbox="allow-same-origin"
+        title="Email preview"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: IFRAME_W,
+          height: `${Math.round(100 / scale)}%`,
+          border: "none",
+          transformOrigin: "top left",
+          transform: `scale(${scale})`,
+          pointerEvents: "none",
+          display: "block",
+        }}
+      />
+      {/* Transparent overlay: captures wheel events and forwards to iframe scroll, blocks all clicks */}
+      <div ref={overlayRef} style={{ position: "absolute", inset: 0, cursor: "default" }} />
+    </div>
   );
 }
 
