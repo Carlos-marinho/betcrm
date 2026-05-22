@@ -1,9 +1,9 @@
 "use client";
 
-import { DashboardShell } from "@/components/dashboard/shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { useAnalyticsOverview, useAnalyticsTrend } from "@/lib/hooks";
 import { Users, TrendingUp, MessageSquare, Workflow, MailOpen, MousePointerClick } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -60,8 +60,7 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Análises</h1>
@@ -86,7 +85,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Profiles KPIs */}
-        <section>
+        <section className="animate-fade-up">
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
             Perfis
           </h2>
@@ -118,7 +117,7 @@ export default function AnalyticsPage() {
         </section>
 
         {/* Messages KPIs */}
-        <section>
+        <section className="animate-fade-up" style={{ animationDelay: "40ms" }}>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
             Mensagens
           </h2>
@@ -131,7 +130,7 @@ export default function AnalyticsPage() {
         </section>
 
         {/* Charts Grid */}
-        <div className="grid gap-6 lg:grid-cols-5">
+        <div className="grid gap-6 lg:grid-cols-5 animate-fade-up" style={{ animationDelay: "80ms" }}>
           {/* Area Chart — last 7 days trend */}
           <div className="card-vault p-5 lg:col-span-3">
             <div className="flex items-center justify-between mb-5">
@@ -142,7 +141,7 @@ export default function AnalyticsPage() {
             </div>
 
             {trendLoading ? (
-              <div className="h-[200px] shimmer-bg rounded" />
+              <Skeleton className="h-[200px] w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -183,8 +182,14 @@ export default function AnalyticsPage() {
           <div className="card-vault p-5 lg:col-span-2">
             <h3 className="font-display font-semibold text-sm mb-5">Funil de Mensagens</h3>
             {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-7 shimmer-bg rounded" />)}
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-14 shrink-0" />
+                    <Skeleton className="h-6 flex-1" />
+                    <Skeleton className="h-4 w-7 shrink-0" />
+                  </div>
+                ))}
               </div>
             ) : data ? (
               <div className="space-y-2">
@@ -218,7 +223,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Flows KPIs */}
-        <section>
+        <section className="animate-fade-up" style={{ animationDelay: "120ms" }}>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
             Fluxos
           </h2>
@@ -237,7 +242,7 @@ export default function AnalyticsPage() {
             )}
           </div>
           {trendLoading ? (
-            <div className="h-[180px] shimmer-bg rounded" />
+            <Skeleton className="h-[180px] w-full" />
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} barGap={2} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -254,6 +259,5 @@ export default function AnalyticsPage() {
           )}
         </div>
       </div>
-    </DashboardShell>
   );
 }

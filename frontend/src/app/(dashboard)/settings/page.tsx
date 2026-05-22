@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,8 +22,9 @@ import {
   ExternalLink, Database, Zap, Radio, Shield, Key, Webhook,
   Bell, Globe, CheckCircle, Copy, RefreshCw, Plus, Pencil, Trash2,
   Mail, MessageSquare, Smartphone, Server, Lock, AlertTriangle,
-  Loader2, FileDown, UserX, EyeOff, Clock,
+  Loader2, FileDown, UserX, Eye, EyeOff, Clock,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -75,21 +75,28 @@ type ConfigField = {
   type: "text" | "password" | "number" | "email" | "url";
   required?: boolean;
   placeholder?: string;
+  aliases?: string[];
 };
+
+const TRACKING_PROVIDERS = new Set(["PostalEmailProvider", "MailgunEmailProvider"]);
+const REVEALABLE_CONFIG_FIELDS = new Set(["api_key", "webhook_signing_key"]);
 
 const PROVIDER_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
   PostalEmailProvider: [
     { key: "api_url", label: "API URL do Postal", type: "url", required: true, placeholder: "https://postal.example.com" },
     { key: "api_key", label: "API Key", type: "password", required: true },
     { key: "server", label: "Server Name", type: "text", required: true, placeholder: "betcrm" },
-    { key: "from_email", label: "From Email", type: "email", required: true, placeholder: "noreply@example.com" },
-    { key: "from_name", label: "From Name", type: "text", placeholder: "BetCRM" },
+    { key: "default_from_email", label: "From Email", type: "email", required: true, placeholder: "noreply@example.com", aliases: ["from_email"] },
+    { key: "default_from_name", label: "From Name", type: "text", placeholder: "BetCRM", aliases: ["from_name"] },
+    { key: "webhook_secret", label: "Webhook Secret (tracking)", type: "password", placeholder: "Segredo HMAC configurado no Postal" },
   ],
   MailgunEmailProvider: [
     { key: "api_key", label: "API Key", type: "password", required: true },
     { key: "domain", label: "Domain", type: "text", required: true, placeholder: "mg.example.com" },
-    { key: "from_email", label: "From Email", type: "email", required: true },
+    { key: "default_from_email", label: "From Email", type: "email", required: true, aliases: ["from_email"] },
+    { key: "default_from_name", label: "From Name", type: "text", placeholder: "BetCRM", aliases: ["from_name"] },
     { key: "region", label: "Region (us ou eu)", type: "text", placeholder: "us" },
+    { key: "webhook_signing_key", label: "Webhook Signing Key (tracking)", type: "password", placeholder: "Signing key do painel Mailgun", aliases: ["webhook_secret"] },
   ],
   SmtpEmailProvider: [
     { key: "host", label: "SMTP Host", type: "text", required: true, placeholder: "smtp.example.com" },
@@ -100,8 +107,8 @@ const PROVIDER_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
   ],
   WebhookSmsProvider: [
     { key: "url", label: "Webhook URL", type: "url", required: true, placeholder: "https://api.example.com/sms" },
-    { key: "api_key", label: "Bearer Token / API Key", type: "password" },
-    { key: "from_number", label: "From Number", type: "text", placeholder: "+5511..." },
+    { key: "auth_value", label: "Bearer Token / API Key", type: "password", aliases: ["api_key"] },
+    { key: "sender_id", label: "Sender ID", type: "text", placeholder: "+5511...", aliases: ["from_number"] },
   ],
   ZenviaSmsProvider: [
     { key: "api_token", label: "API Token", type: "password", required: true },
@@ -167,43 +174,93 @@ const providerFormSchema = z.object({
   is_active: z.boolean().default(true),
   is_primary: z.boolean().default(false),
   priority: z.number().min(1).max(999).default(100),
-  daily_quota: z.number().nullable().optional(),
-  monthly_quota: z.number().nullable().optional(),
+  daily_quota: z.preprocess(
+    (value) => (typeof value === "number" && Number.isNaN(value) ? null : value),
+    z.number().min(0).nullable().optional()
+  ),
+  monthly_quota: z.preprocess(
+    (value) => (typeof value === "number" && Number.isNaN(value) ? null : value),
+    z.number().min(0).nullable().optional()
+  ),
 });
 type ProviderForm = z.infer<typeof providerFormSchema>;
+
+function getProviderFormDefaults(provider?: ProviderConfig | null): ProviderForm {
+  return provider
+    ? {
+        name: provider.name,
+        channel: provider.channel,
+        provider_class: provider.provider_class,
+        is_active: provider.is_active,
+        is_primary: provider.is_primary,
+        priority: provider.priority,
+        daily_quota: provider.daily_quota ?? undefined,
+        monthly_quota: provider.monthly_quota ?? undefined,
+      }
+    : {
+        name: "",
+        channel: "email",
+        provider_class: "",
+        is_active: true,
+        is_primary: false,
+        priority: 100,
+      };
+}
+
+function isFilledConfigValue(value: unknown) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+function getProviderConfigFields(provider?: ProviderConfig | null): Record<string, unknown> {
+  if (!provider?.config) return {};
+
+  const config = { ...provider.config };
+  const schema = PROVIDER_CONFIG_SCHEMAS[provider.provider_class] ?? [];
+
+  schema.forEach((field) => {
+    const aliasKey = field.aliases?.find((key) => isFilledConfigValue(provider.config[key]));
+    if (!isFilledConfigValue(config[field.key]) && aliasKey) {
+      config[field.key] = provider.config[aliasKey];
+    }
+
+    field.aliases?.forEach((key) => {
+      delete config[key];
+    });
+  });
+
+  return config;
+}
+
+function configValueToInputValue(value: unknown) {
+  if (value === undefined || value === null) return "";
+  if (["string", "number", "boolean"].includes(typeof value)) return String(value);
+  return JSON.stringify(value);
+}
 
 function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
   const createMutation = useCreateProvider();
   const updateMutation = useUpdateProvider();
   const isEditing = !!provider;
 
-  const [configFields, setConfigFields] = useState<Record<string, string>>(() => {
-    if (provider?.config) {
-      return Object.fromEntries(
-        Object.entries(provider.config).map(([k, v]) => [k, String(v)])
-      );
-    }
-    return {};
-  });
+  const [configFields, setConfigFields] = useState<Record<string, unknown>>(() => getProviderConfigFields(provider));
+  const [visibleConfigFields, setVisibleConfigFields] = useState<Set<string>>(new Set());
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors, isSubmitting } } = useForm<ProviderForm>({
     resolver: zodResolver(providerFormSchema),
-    defaultValues: provider
-      ? {
-          name: provider.name, channel: provider.channel,
-          provider_class: provider.provider_class,
-          is_active: provider.is_active, is_primary: provider.is_primary,
-          priority: provider.priority,
-          daily_quota: provider.daily_quota ?? undefined,
-          monthly_quota: provider.monthly_quota ?? undefined,
-        }
-      : { name: "", channel: "email", provider_class: "", is_active: true, is_primary: false, priority: 100 },
+    defaultValues: getProviderFormDefaults(provider),
   });
 
   const watchProviderClass = watch("provider_class");
   const watchChannel = watch("channel");
   const isActiveVal = watch("is_active");
   const isPrimaryVal = watch("is_primary");
+
+  useEffect(() => {
+    if (!open) return;
+    reset(getProviderFormDefaults(provider));
+    setConfigFields(getProviderConfigFields(provider));
+    setVisibleConfigFields(new Set());
+  }, [provider, open, reset]);
 
   const configSchema = PROVIDER_CONFIG_SCHEMAS[watchProviderClass] ?? [];
   const availableClasses = PROVIDER_CLASSES.filter((p) => p.channel === watchChannel);
@@ -212,12 +269,25 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
     setConfigFields((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleConfigFieldVisibility(key: string) {
+    setVisibleConfigFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
   async function onSubmit(values: ProviderForm) {
     const payload = {
       ...values,
       config: configFields,
-      daily_quota: values.daily_quota ?? null,
-      monthly_quota: values.monthly_quota ?? null,
+      priority: Number.isNaN(values.priority) ? 100 : values.priority,
+      daily_quota: (values.daily_quota === undefined || Number.isNaN(values.daily_quota as number)) ? null : values.daily_quota,
+      monthly_quota: (values.monthly_quota === undefined || Number.isNaN(values.monthly_quota as number)) ? null : values.monthly_quota,
     };
     try {
       if (isEditing && provider) {
@@ -236,6 +306,7 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
   function handleClose() {
     reset();
     setConfigFields({});
+    setVisibleConfigFields(new Set());
     onClose();
   }
 
@@ -297,22 +368,64 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
                   Configuração do Provedor
                 </p>
               </div>
-              {configSchema.map((field) => (
-                <div key={field.key} className="space-y-1.5">
-                  <Label htmlFor={`cfg-${field.key}`}>
-                    {field.label}
-                    {field.required && <span className="text-destructive ml-1">*</span>}
-                  </Label>
-                  <Input
-                    id={`cfg-${field.key}`}
-                    type={field.type === "password" ? "password" : "text"}
-                    value={configFields[field.key] ?? ""}
-                    onChange={(e) => setConfigField(field.key, e.target.value)}
-                    placeholder={field.placeholder}
-                    className={field.type === "password" ? "font-data" : ""}
-                  />
-                </div>
-              ))}
+              {configSchema.map((field) => {
+                const canReveal = field.type === "password" && REVEALABLE_CONFIG_FIELDS.has(field.key);
+                const isVisible = visibleConfigFields.has(field.key);
+
+                return (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label htmlFor={`cfg-${field.key}`}>
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id={`cfg-${field.key}`}
+                        type={field.type === "password" && !isVisible ? "password" : "text"}
+                        value={configValueToInputValue(configFields[field.key])}
+                        onChange={(e) => setConfigField(field.key, e.target.value)}
+                        placeholder={field.placeholder}
+                        className={`${field.type === "password" ? "font-data" : ""} ${canReveal ? "pr-10" : ""}`}
+                      />
+                      {canReveal && (
+                        <button
+                          type="button"
+                          onClick={() => toggleConfigFieldVisibility(field.key)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                          aria-label={isVisible ? "Ocultar valor" : "Mostrar valor"}
+                        >
+                          {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Webhook tracking URL (for tracking-capable providers when editing) */}
+          {isEditing && provider && TRACKING_PROVIDERS.has(watchProviderClass) && (
+            <div className="space-y-2 p-4 rounded-lg border border-teal/20 bg-teal/[0.03]">
+              <div className="flex items-center gap-2">
+                <Webhook className="w-3.5 h-3.5 text-teal" />
+                <p className="text-xs font-medium text-teal uppercase tracking-wider">
+                  URL de Webhook de Tracking
+                </p>
+                {provider.tracking_enabled && <span className="badge-teal ml-auto">ativo</span>}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Configure esta URL no painel do provedor para receber eventos de entrega, abertura e clique.
+              </p>
+              <div className="flex items-center gap-2 px-3 py-2 bg-black/30 border border-border rounded-md">
+                <code className="font-data text-xs text-teal flex-1 break-all">
+                  {API_BASE}/api/v1/messaging/webhooks/{provider.id}
+                </code>
+                <CopyButton value={`${API_BASE}/api/v1/messaging/webhooks/${provider.id}`} />
+              </div>
+              <p className="text-[11px] text-muted-foreground/60">
+                Configure o <strong>Webhook Secret</strong> acima com o mesmo segredo usado no provedor para habilitar verificação HMAC.
+              </p>
             </div>
           )}
 
@@ -630,8 +743,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <>
+    <div className="space-y-6">
         <div>
           <h1 className="font-display font-bold text-2xl">Configurações</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -724,7 +837,15 @@ export default function SettingsPage() {
 
             {loadingProviders && (
               <div className="space-y-2">
-                {[1, 2, 3].map((i) => <div key={i} className="h-16 shimmer-bg rounded-lg" />)}
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="card-vault p-4 flex items-center gap-3">
+                    <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-40" />
+                      <Skeleton className="h-3 w-56" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -768,6 +889,7 @@ export default function SettingsPage() {
                           ) : (
                             <span className="badge-muted">inativo</span>
                           )}
+                          {p.tracking_enabled && <span className="badge-teal">tracking</span>}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {p.provider_class_display} · prioridade {p.priority}
@@ -818,7 +940,7 @@ export default function SettingsPage() {
               </div>
 
               {loadingSettings ? (
-                <div className="h-9 shimmer-bg rounded-md" />
+                <Skeleton className="h-9 w-full rounded-md" />
               ) : apiKey ? (
                 <>
                   <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] border border-border rounded-md">
@@ -1052,6 +1174,6 @@ Content-Type: application/json
         provider={editProvider}
       />
       <LgpdRequestModal open={lgpdModalOpen} onClose={() => setLgpdModalOpen(false)} />
-    </DashboardShell>
+    </>
   );
 }

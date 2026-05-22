@@ -1,15 +1,13 @@
 "use client";
 
-import { DashboardShell } from "@/components/dashboard/shell";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { useAnalyticsOverview, useRecentEvents } from "@/lib/hooks";
 import { Users, TrendingUp, MessageSquare, Workflow, History } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useEffect, useState } from "react";
-import { isAuthenticated } from "@/lib/auth";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PERIODS = [
   { label: "6h",  hours: 6 },
@@ -36,14 +34,9 @@ function eventColor(type: string) {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [hours, setHours] = useState<PeriodHours>(24);
   const { data, isLoading } = useAnalyticsOverview(hours);
-  const { data: eventsData } = useRecentEvents({ limit: 8, hours, paused: hours > 24 });
-
-  useEffect(() => {
-    if (!isAuthenticated()) router.push("/login");
-  }, [router]);
+  const { data: eventsData, isLoading: eventsLoading } = useRecentEvents({ limit: 8, hours, paused: hours > 24 });
 
   const ftdRate =
     data && data.profiles.total > 0
@@ -55,8 +48,7 @@ export default function DashboardPage() {
   const wLabel = windowLabel(hours);
 
   return (
-    <DashboardShell>
-      <div className="space-y-8">
+    <div className="space-y-8">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
@@ -102,7 +94,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPI Grid */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 animate-fade-up">
           <MetricCard
             title="Total de Perfis"
             value={isLoading ? "—" : (data?.profiles.total ?? 0).toLocaleString("pt-BR")}
@@ -138,7 +130,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Grid */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2 animate-fade-up" style={{ animationDelay: "60ms" }}>
           {/* Events Feed */}
           <div className="card-vault p-5">
             <div className="flex items-center justify-between mb-4">
@@ -157,12 +149,25 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-2">
-              {liveEvents.length === 0 && (
+              {eventsLoading && (
+                <div className="space-y-1.5 py-1">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-border/60 last:border-0">
+                      <div className="flex items-center gap-2.5">
+                        <Skeleton className="h-5 w-20 rounded" />
+                        <Skeleton className="h-3.5 w-24" />
+                      </div>
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!eventsLoading && liveEvents.length === 0 && (
                 <p className="text-xs text-muted-foreground py-4 text-center">
                   Nenhum evento nas últimas {wLabel}
                 </p>
               )}
-              {liveEvents.map((ev) => (
+              {!eventsLoading && liveEvents.map((ev) => (
                 <div
                   key={ev.id}
                   className="flex items-center justify-between py-2 border-b border-border/60 last:border-0 animate-fade-up"
@@ -193,7 +198,13 @@ export default function DashboardPage() {
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-8 shimmer-bg rounded" />
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-1 w-full rounded-full" />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -227,7 +238,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-      </div>
-    </DashboardShell>
+    </div>
   );
 }

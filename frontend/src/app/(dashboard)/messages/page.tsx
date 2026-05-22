@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { useMessageLogs, useMessagingStats } from "@/lib/hooks";
+import { SendMessageModal } from "@/components/features/messages/send-message-modal";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
-  Activity, ChevronLeft, ChevronRight,
+  Activity, ChevronLeft, ChevronRight, Send,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -79,6 +80,7 @@ export default function MessagesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
   const [statsDays, setStatsDays] = useState(7);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
 
   const { data, isLoading } = useMessageLogs({
     channel: channelFilter || undefined,
@@ -127,17 +129,25 @@ export default function MessagesPage() {
   ];
 
   return (
-    <DashboardShell>
+    <>
+      <SendMessageModal open={sendModalOpen} onClose={() => setSendModalOpen(false)} />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Mensagens</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {data ? `${data.count.toLocaleString("pt-BR")} mensagens no período` : "Carregando..."}
-            </p>
+            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+              {isLoading ? <Skeleton className="h-3.5 w-40" /> : `${data?.count.toLocaleString("pt-BR") ?? 0} mensagens no período`}
+            </span>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSendModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-background text-xs font-semibold hover:bg-gold/90 transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Enviar mensagem
+            </button>
             {/* Seletor de período das métricas */}
             <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
               {PERIOD_OPTIONS.map((opt) => (
@@ -173,7 +183,7 @@ export default function MessagesPage() {
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">{stat.label}</p>
                   {statsLoading ? (
-                    <div className="h-5 w-16 shimmer-bg rounded mt-0.5" />
+                    <Skeleton className="h-5 w-16 mt-0.5" />
                   ) : (
                     <p className="font-data text-lg font-semibold text-foreground leading-tight">
                       {stat.value}
@@ -240,12 +250,12 @@ export default function MessagesPage() {
               <tbody>
                 {isLoading && Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i} className="border-b border-border/50">
-                    <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-24 shimmer-bg rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-28 shimmer-bg rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-40 shimmer-bg rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-20 shimmer-bg rounded" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                   </tr>
                 ))}
 
@@ -327,6 +337,6 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
-    </DashboardShell>
+    </>
   );
 }

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DashboardShell } from "@/components/dashboard/shell";
 import {
   useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments,
   useFlowScheduleRuns,
@@ -22,6 +21,7 @@ import {
   Workflow, Play, Pause, Plus, Pencil, Activity, CheckCircle2,
   XCircle, AlertTriangle, Clock, Zap, LayoutGrid, CalendarClock, Users, Calendar,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -786,14 +786,14 @@ export default function FlowsPage() {
   }
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <>
+    <div className="space-y-6">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Fluxos</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {data ? `${data.count} fluxos cadastrados` : "Carregando..."}
-            </p>
+            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+              {isLoading ? <Skeleton className="h-3.5 w-28" /> : `${data?.count ?? 0} fluxos cadastrados`}
+            </span>
           </div>
           <button
             onClick={handleNew}
@@ -815,7 +815,14 @@ export default function FlowsPage() {
             {isLoading && (
               <div className="grid gap-3">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="card-vault p-5 h-20 shimmer-bg" />
+                  <div key={i} className="card-vault p-4 flex items-center gap-4">
+                    <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3.5 w-40" />
+                      <Skeleton className="h-3 w-64" />
+                    </div>
+                    <Skeleton className="h-7 w-20 rounded-md shrink-0" />
+                  </div>
                 ))}
               </div>
             )}
@@ -835,8 +842,9 @@ export default function FlowsPage() {
               </div>
             )}
 
-            <div className="grid gap-3">
-              {data?.results.map((flow) => (
+            {!isLoading && data && (
+            <div className="grid gap-3 animate-fade-up">
+              {data.results.map((flow) => (
                 <div
                   key={flow.id}
                   className="card-vault p-4 flex items-center gap-4 hover:border-gold/20 transition-all group"
@@ -908,6 +916,7 @@ export default function FlowsPage() {
                 </div>
               ))}
             </div>
+            )}
           </TabsContent>
 
           {/* ── EXECUTIONS TAB ── */}
@@ -949,11 +958,11 @@ export default function FlowsPage() {
                   <tbody>
                     {execLoading && Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        <td className="px-4 py-3"><div className="h-4 w-28 shimmer-bg rounded" /></td>
-                        <td className="px-4 py-3"><div className="h-4 w-20 shimmer-bg rounded" /></td>
-                        <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded" /></td>
-                        <td className="px-4 py-3"><div className="h-4 w-24 shimmer-bg rounded" /></td>
-                        <td className="px-4 py-3"><div className="h-4 w-20 shimmer-bg rounded" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                       </tr>
                     ))}
                     {!execLoading && executions?.results.map((exec) => {
@@ -1007,6 +1016,6 @@ export default function FlowsPage() {
         onClose={() => { setModalOpen(false); setEditTarget(null); }}
         flow={editTarget}
       />
-    </DashboardShell>
+    </>
   );
 }

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DashboardShell } from "@/components/dashboard/shell";
 import {
   useSegments,
   useCreateSegment,
@@ -26,6 +25,7 @@ import { RulesBuilder, type SegmentRules } from "@/components/features/rules-bui
 import {
   Filter, Plus, Pencil, Trash2, Users, ExternalLink, TrendingUp,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -95,6 +95,22 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
   });
 
   const isActiveVal = watch("is_active");
+
+  useEffect(() => {
+    if (!open) return;
+    reset(
+      segment
+        ? { name: segment.name, code: segment.code, description: segment.description, is_active: segment.is_active }
+        : { name: "", code: "", description: "", is_active: true }
+    );
+    setRules(
+      segment?.rules && typeof segment.rules === "object" && "conditions" in (segment.rules as object)
+        ? (segment.rules as SegmentRules)
+        : EMPTY_RULES
+    );
+    setPreviewCount(null);
+    setActiveTab("info");
+  }, [segment, open, reset]);
 
   function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     setValue("name", e.target.value);
@@ -402,15 +418,15 @@ export default function SegmentsPage() {
   };
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <>
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Segmentos</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {data ? `${data.count} segmentos` : "Carregando..."}
-            </p>
+            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+              {isLoading ? <Skeleton className="h-3.5 w-24" /> : `${data?.count ?? 0} segmentos`}
+            </span>
           </div>
           <button
             onClick={handleNew}
@@ -425,7 +441,20 @@ export default function SegmentsPage() {
         {isLoading && (
           <div className="grid gap-3 sm:grid-cols-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="card-vault p-5 h-32 shimmer-bg" />
+              <div key={i} className="card-vault p-5 h-32">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-2 pt-0.5">
+                    <Skeleton className="h-3.5 w-36" />
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-3 w-48" />
+                    <div className="flex items-center gap-3 pt-1">
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -449,8 +478,9 @@ export default function SegmentsPage() {
         )}
 
         {/* Segments grid */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {data?.results.map((seg) => (
+        {!isLoading && data && data.results.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 animate-fade-up">
+          {data.results.map((seg) => (
             <div key={seg.id} className="card-vault p-5 hover:border-gold/20 transition-all group">
               <div className="flex items-start gap-3">
                 {/* Icon */}
@@ -532,6 +562,7 @@ export default function SegmentsPage() {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       <SegmentModal
@@ -548,6 +579,6 @@ export default function SegmentsPage() {
         onClose={() => setMembersTarget(null)}
         segment={membersTarget}
       />
-    </DashboardShell>
+    </>
   );
 }

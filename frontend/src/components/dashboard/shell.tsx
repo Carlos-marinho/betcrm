@@ -17,6 +17,7 @@ import {
   LogOut,
   Radio,
 } from "lucide-react";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -30,13 +31,41 @@ const navItems = [
   { href: "/settings", label: "Config.", icon: Settings },
 ];
 
+function isActive(href: string, pathname: string) {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+function isFullScreenRoute(pathname: string) {
+  return /^\/flows\/[^/]+$/.test(pathname);
+}
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  useEffect(() => {
+    const prefetchNavRoutes = () => {
+      for (const item of navItems) {
+        if (item.href !== pathname) router.prefetch(item.href);
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(prefetchNavRoutes, { timeout: 2000 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = globalThis.setTimeout(prefetchNavRoutes, 250);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [pathname, router]);
+
   function handleLogout() {
     clearToken();
     router.push("/login");
+  }
+
+  if (isFullScreenRoute(pathname)) {
+    return <>{children}</>;
   }
 
   return (
@@ -60,13 +89,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            const active = isActive(item.href, pathname);
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
+                aria-current={active ? "page" : undefined}
+                onMouseEnter={() => router.prefetch(item.href)}
+                onFocus={() => router.prefetch(item.href)}
                 className={cn(
-                  "group flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150",
+                  "w-full group flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150",
                   active
                     ? "bg-gold/10 text-gold border border-gold/15"
                     : "text-muted-foreground hover:text-foreground hover:bg-white/5 border border-transparent"
@@ -99,7 +132,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
-        <div className="p-8 max-w-[1400px] mx-auto">
+        <div key={pathname} className="p-8 max-w-[1400px] mx-auto animate-page-in">
           {children}
         </div>
       </main>

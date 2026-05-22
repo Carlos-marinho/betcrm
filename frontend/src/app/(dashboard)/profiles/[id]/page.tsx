@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { useProfile, useProfileTimeline } from "@/lib/hooks";
 import {
   ArrowLeft,
@@ -30,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
@@ -99,22 +99,80 @@ export default function ProfileDetailPage() {
 
   if (isLoading) {
     return (
-      <DashboardShell>
-        <div className="space-y-6">
-          <div className="h-6 w-32 shimmer-bg rounded" />
-          <div className="card-vault p-6 h-32 shimmer-bg" />
+      <div className="space-y-6">
+          {/* Back link */}
+          <Skeleton className="h-4 w-20" />
+
+          {/* Hero card */}
+          <div className="card-vault p-6">
+            <div className="flex flex-col sm:flex-row items-start gap-5">
+              <Skeleton className="w-16 h-16 rounded-xl shrink-0" />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-5 w-10 rounded" />
+                  <Skeleton className="h-5 w-16 rounded" />
+                </div>
+                <Skeleton className="h-3.5 w-32" />
+                <div className="flex items-center gap-4 pt-1">
+                  <Skeleton className="h-3.5 w-36" />
+                  <Skeleton className="h-3.5 w-24" />
+                  <Skeleton className="h-3.5 w-28" />
+                </div>
+              </div>
+              <div className="space-y-1 text-right shrink-0">
+                <Skeleton className="h-3 w-16 ml-auto" />
+                <Skeleton className="h-8 w-28" />
+                <Skeleton className="h-3 w-20 ml-auto" />
+              </div>
+            </div>
+          </div>
+
+          {/* Stats grid */}
           <div className="grid lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => <div key={i} className="card-vault p-5 h-48 shimmer-bg" />)}
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="card-vault p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-7 h-7 rounded-lg" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <div key={j} className="flex items-center justify-between py-2 border-b border-border/60 last:border-0">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3.5 w-20" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Timeline placeholder */}
+          <div className="card-vault p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-7 w-48 rounded-lg" />
+            </div>
+            <div className="space-y-4 pl-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <Skeleton className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5" />
+                  <div className="flex-1 space-y-1.5 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-5 w-28 rounded" />
+                      <Skeleton className="h-3.5 w-20" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </DashboardShell>
     );
   }
 
   if (isError || !profile) {
     return (
-      <DashboardShell>
-        <div className="card-vault p-12 text-center space-y-4">
+      <div className="card-vault p-12 text-center space-y-4">
           <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
           <div>
             <p className="font-display font-semibold text-foreground mb-1">Profile não encontrado</p>
@@ -128,7 +186,6 @@ export default function ProfileDetailPage() {
             Voltar para Profiles
           </button>
         </div>
-      </DashboardShell>
     );
   }
 
@@ -136,9 +193,8 @@ export default function ProfileDetailPage() {
   const location = [profile.city, profile.state, profile.country].filter(Boolean).join(", ");
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
-        {/* Back */}
+    <div className="space-y-6">
+      {/* Back */}
         <Link
           href="/profiles"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -300,10 +356,9 @@ export default function ProfileDetailPage() {
           </div>
         </div>
 
-        {/* Real Timeline */}
-        <TimelineSection profileId={profileId} />
-      </div>
-    </DashboardShell>
+      {/* Real Timeline */}
+      <TimelineSection profileId={profileId} />
+    </div>
   );
 }
 
@@ -404,13 +459,15 @@ function TimelineSection({ profileId }: { profileId: number }) {
       </div>
 
       {isLoading && (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="space-y-4 pl-4">
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-full shimmer-bg shrink-0" />
-              <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-32 shimmer-bg rounded" />
-                <div className="h-3 w-48 shimmer-bg rounded" />
+              <Skeleton className="w-2.5 h-2.5 rounded-full shrink-0 mt-1.5" />
+              <div className="flex-1 space-y-1.5 pb-3 border-b border-border/40 last:border-0">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-28 rounded" />
+                  <Skeleton className="h-3.5 w-20" />
+                </div>
               </div>
             </div>
           ))}

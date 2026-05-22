@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { ImportProfilesModal } from "@/components/features/profiles/ImportProfilesModal";
 import { useProfiles } from "@/lib/hooks";
 import { Search, ChevronLeft, ChevronRight, ExternalLink, Upload } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
@@ -29,15 +29,14 @@ export default function ProfilesPage() {
   const totalPages = data ? Math.ceil(data.count / 20) : 1;
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Perfis</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {data ? `${data.count.toLocaleString("pt-BR")} usuários cadastrados` : "Carregando..."}
-            </p>
+            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+              {isLoading ? <Skeleton className="h-3.5 w-36" /> : `${data?.count.toLocaleString("pt-BR") ?? 0} usuários cadastrados`}
+            </span>
           </div>
           <button
             onClick={() => setImportOpen(true)}
@@ -100,11 +99,11 @@ export default function ProfilesPage() {
                 {isLoading && (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="border-b border-border/50">
-                      <td className="px-4 py-3"><div className="h-4 w-36 shimmer-bg rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 shimmer-bg rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 shimmer-bg rounded ml-auto" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-20 shimmer-bg rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 shimmer-bg rounded" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-4 py-3" />
                     </tr>
                   ))
@@ -187,7 +186,6 @@ export default function ProfilesPage() {
             </div>
           )}
         </div>
-      </div>
-    </DashboardShell>
+    </div>
   );
 }

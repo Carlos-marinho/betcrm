@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { DashboardShell } from "@/components/dashboard/shell";
 import {
   useTemplates,
   useCreateTemplate,
@@ -16,7 +15,9 @@ import {
   useDeleteAbTest,
   type MessageTemplate,
   type AbTest,
+  type EmailAsset,
 } from "@/lib/hooks";
+import { AssetLibraryModal } from "@/components/features/templates/asset-library-modal";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -27,8 +28,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FileText, Mail, MessageSquare, Bell, MessageCircle, Plus, Pencil, Trash2, Eye,
-  FlaskConical, Loader2, CheckCircle, AlertCircle, User,
+  FlaskConical, Loader2, CheckCircle, AlertCircle, User, ImageIcon, X, Images,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -57,6 +59,7 @@ const templateSchema = z.object({
   subject: z.string().optional(),
   body_text: z.string().min(1, "Corpo é obrigatório"),
   body_html: z.string().optional(),
+  banner_asset: z.number().nullable().optional(),
   is_active: z.boolean().default(true),
 });
 type TemplateForm = z.infer<typeof templateSchema>;
@@ -482,6 +485,8 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
   const updateMutation = useUpdateTemplate();
   const isEditing = !!template;
   const [previewTab, setPreviewTab] = useState("form");
+  const [assetLibOpen, setAssetLibOpen] = useState(false);
+  const [selectedBanner, setSelectedBanner] = useState<EmailAsset | null>(null);
 
   const {
     register, handleSubmit, control, setValue, watch, reset,
@@ -493,15 +498,42 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
           name: template.name, code: template.code, channel: template.channel,
           category: template.category, subject: template.subject,
           body_text: template.body_text, body_html: template.body_html,
+          banner_asset: template.banner_asset,
           is_active: template.is_active,
         }
-      : { name: "", code: "", channel: "email", category: "", subject: "", body_text: "", body_html: "", is_active: true },
+      : { name: "", code: "", channel: "email", category: "", subject: "", body_text: "", body_html: "", banner_asset: null, is_active: true },
   });
 
   const watchChannel = watch("channel");
   const watchBodyText = watch("body_text");
   const watchSubject = watch("subject");
   const isActiveVal = watch("is_active");
+
+  useEffect(() => {
+    if (!open) return;
+    reset(
+      template
+        ? {
+            name: template.name, code: template.code, channel: template.channel,
+            category: template.category, subject: template.subject,
+            body_text: template.body_text, body_html: template.body_html,
+            banner_asset: template.banner_asset,
+            is_active: template.is_active,
+          }
+        : { name: "", code: "", channel: "email", category: "", subject: "", body_text: "", body_html: "", banner_asset: null, is_active: true }
+    );
+    // Pré-popula o preview do banner se template já tem um
+    if (template?.banner_asset_url) {
+      setSelectedBanner({
+        id: template.banner_asset!,
+        file_url: template.banner_asset_url,
+        name: "Banner atual",
+      } as EmailAsset);
+    } else {
+      setSelectedBanner(null);
+    }
+    setPreviewTab("form");
+  }, [template, open, reset]);
 
   function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     setValue("name", e.target.value);
@@ -528,9 +560,21 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
     }
   }
 
+  function handleBannerSelect(asset: EmailAsset) {
+    setSelectedBanner(asset);
+    setValue("banner_asset", asset.id);
+    setAssetLibOpen(false);
+  }
+
+  function handleBannerClear() {
+    setSelectedBanner(null);
+    setValue("banner_asset", null);
+  }
+
   function handleClose() {
     reset();
     setPreviewTab("form");
+    setSelectedBanner(null);
     onClose();
   }
 
@@ -607,6 +651,63 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
                     placeholder={`Olá {{ profile.first_name }}, seu depósito foi confirmado!`}
                     {...register("subject")}
                   />
+                </div>
+              )}
+
+              {watchChannel === "email" && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      Banner principal{" "}
+                      <span className="normal-case text-muted-foreground/60">(opcional)</span>
+                    </Label>
+                    {selectedBanner && (
+                      <button
+                        type="button"
+                        onClick={handleBannerClear}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Remover
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedBanner ? (
+                    <div
+                      onClick={() => setAssetLibOpen(true)}
+                      className="relative group cursor-pointer rounded-lg overflow-hidden border border-border hover:border-gold/30 transition-colors bg-checkered"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedBanner.file_url || selectedBanner.file}
+                        alt={selectedBanner.alt_text || selectedBanner.name}
+                        className="w-full max-h-28 object-contain"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs font-medium text-white bg-black/60 px-3 py-1.5 rounded-lg">
+                          Trocar banner
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAssetLibOpen(true)}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-border hover:border-gold/30 hover:bg-gold/[0.02] text-muted-foreground hover:text-foreground transition-all"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-medium">Selecionar banner</p>
+                        <p className="text-xs text-muted-foreground/60">
+                          Será exposto via <code className="font-data">{"{{ banner_url }}"}</code> no HTML
+                        </p>
+                      </div>
+                      <Images className="w-4 h-4 ml-auto opacity-40" />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -716,6 +817,13 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
           </button>
         </DialogFooter>
       </DialogContent>
+
+      <AssetLibraryModal
+        open={assetLibOpen}
+        onClose={() => setAssetLibOpen(false)}
+        onSelect={handleBannerSelect}
+        filterType="banner"
+      />
     </Dialog>
   );
 }
@@ -731,6 +839,7 @@ export default function TemplatesPage() {
   const [editTarget, setEditTarget] = useState<MessageTemplate | null>(null);
   const [previewTarget, setPreviewTarget] = useState<MessageTemplate | null>(null);
   const [abTestTarget, setAbTestTarget] = useState<MessageTemplate | null>(null);
+  const [assetLibOpen, setAssetLibOpen] = useState(false);
 
   function handleNew() { setEditTarget(null); setModalOpen(true); }
   function handleEdit(tpl: MessageTemplate) { setEditTarget(tpl); setModalOpen(true); }
@@ -746,23 +855,32 @@ export default function TemplatesPage() {
   }
 
   return (
-    <DashboardShell>
-      <div className="space-y-6">
+    <>
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Templates</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {data ? `${data.count} templates` : "Carregando..."}
-            </p>
+            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+              {isLoading ? <Skeleton className="h-3.5 w-24" /> : `${data?.count ?? 0} templates`}
+            </span>
           </div>
-          <button
-            onClick={handleNew}
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Novo Template
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAssetLibOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-white/5 text-muted-foreground hover:text-foreground hover:bg-white/10 border border-border transition-colors"
+            >
+              <ImageIcon className="w-4 h-4" />
+              Assets
+            </button>
+            <button
+              onClick={handleNew}
+              className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Template
+            </button>
+          </div>
         </div>
 
         {/* Channel filter */}
@@ -786,7 +904,21 @@ export default function TemplatesPage() {
         {isLoading && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="card-vault p-5 h-32 shimmer-bg" />
+              <div key={i} className="card-vault p-4 flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-1.5 pt-0.5">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+                <div className="mt-auto pt-3 border-t border-border/60 flex items-center gap-2">
+                  <Skeleton className="h-6 w-14 rounded" />
+                  <Skeleton className="h-6 w-10 rounded" />
+                  <Skeleton className="h-6 w-14 rounded" />
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -810,8 +942,9 @@ export default function TemplatesPage() {
         )}
 
         {/* Grid */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {data?.results.map((tpl) => {
+        {!isLoading && data && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 animate-fade-up">
+          {data.results.map((tpl) => {
             const Icon = channelIcon[tpl.channel] ?? FileText;
             const badge = channelBadge[tpl.channel] ?? "badge-muted";
             return (
@@ -874,6 +1007,7 @@ export default function TemplatesPage() {
             );
           })}
         </div>
+        )}
       </div>
 
       <TemplateModal
@@ -891,6 +1025,10 @@ export default function TemplatesPage() {
         onClose={() => setAbTestTarget(null)}
         currentTemplate={abTestTarget}
       />
-    </DashboardShell>
+      <AssetLibraryModal
+        open={assetLibOpen}
+        onClose={() => setAssetLibOpen(false)}
+      />
+    </>
   );
 }
