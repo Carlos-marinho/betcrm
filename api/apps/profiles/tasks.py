@@ -3,7 +3,7 @@ Tasks de profile: upsert ao receber evento, recalcular atributos, tags.
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from celery import shared_task
@@ -131,11 +131,58 @@ def upsert_profile_from_event(event) -> int:
         profile.withdrawal_count += 1
         updated_fields += ["total_withdrawals", "withdrawal_count"]
 
-    # Jogo iniciado: atualiza favorite_game (simples: último jogado)
+    # Jogo iniciado: acumula comportamento de jogo para segmentação
     if code == "game.started":
-        if game := payload.get("game_name"):
-            profile.favorite_game = game
+        game_name = payload.get("gameName", "")
+        game_category = payload.get("category", "")
+        game_provider = payload.get("gameProvider", "")
+        bet_amount = _positive_amount(payload.get("bet_amount", 0))  # opcional: plataforma pode omitir
+
+        profile.game_session_count = (profile.game_session_count or 0) + 1
+        profile.last_game_at = event.occurred_at
+        updated_fields += ["game_session_count", "last_game_at"]
+
+        if bet_amount:
+            profile.total_wagered = (profile.total_wagered or Decimal("0")) + bet_amount
+            updated_fields.append("total_wagered")
+
+        attrs = dict(profile.custom_attributes or {})
+
+        # Contagem por categoria → define favorite_game_category
+        if game_category:
+            cat_counts = dict(attrs.get("category_counts", {}))
+            cat_counts[game_category] = cat_counts.get(game_category, 0) + 1
+            attrs["category_counts"] = cat_counts
+            profile.favorite_game_category = max(cat_counts, key=cat_counts.get)
+            updated_fields.append("favorite_game_category")
+
+        # Contagem por provedor → define favorite_game_provider
+        if game_provider:
+            prov_counts = dict(attrs.get("provider_counts", {}))
+            prov_counts[game_provider] = prov_counts.get(game_provider, 0) + 1
+            attrs["provider_counts"] = prov_counts
+            profile.favorite_game_provider = max(prov_counts, key=prov_counts.get)
+            updated_fields.append("favorite_game_provider")
+
+        # Contagem por jogo → top_games (top 3) + favorite_game (mais jogado)
+        if game_name:
+            game_counts = dict(attrs.get("game_counts", {}))
+            game_counts[game_name] = game_counts.get(game_name, 0) + 1
+            attrs["game_counts"] = game_counts
+            attrs["top_games"] = sorted(game_counts, key=game_counts.get, reverse=True)[:3]
+            # favorite_game = mais jogado (não mais o último)
+            profile.favorite_game = attrs["top_games"][0]
             updated_fields.append("favorite_game")
+
+        # Horário preferido de jogo → send-time optimization
+        hour_counts = dict(attrs.get("play_hour_counts", {}))
+        hour_key = str(event.occurred_at.hour)
+        hour_counts[hour_key] = hour_counts.get(hour_key, 0) + 1
+        attrs["play_hour_counts"] = hour_counts
+        profile.preferred_play_hour = int(max(hour_counts, key=hour_counts.get))
+        updated_fields += ["preferred_play_hour", "custom_attributes"]
+
+        profile.custom_attributes = attrs
 
     # Recalcula LTV
     profile.ltv = profile.total_deposits - profile.total_withdrawals
@@ -145,6 +192,10 @@ def upsert_profile_from_event(event) -> int:
 
     # Recalcula tags dinâmicas async
     recalculate_profile_tags.delay(profile.id)
+
+    # Sessões em janelas de tempo precisam de COUNT real — não dá com +1 incremental
+    if code == "game.started":
+        update_game_session_stats.delay(profile.id)
 
     return profile.id
 
@@ -203,8 +254,74 @@ def recalculate_profile_tags(profile_id: int):
         if days_since_reg <= 7:
             tags.add("NRC")  # Não Registrou Conversão
 
+    # Categoria de jogo dominante
+    for tag in ("SLOTS_PLAYER", "CRASH_PLAYER", "LIVE_PLAYER", "TABLE_PLAYER"):
+        tags.discard(tag)
+    _cat_tag = {
+        "slots": "SLOTS_PLAYER",
+        "crash": "CRASH_PLAYER",
+        "live_casino": "LIVE_PLAYER",
+        "table": "TABLE_PLAYER",
+    }
+    if profile.favorite_game_category:
+        if tag := _cat_tag.get(profile.favorite_game_category):
+            tags.add(tag)
+
+    # Tier de apostas (baseado no ticket médio por sessão)
+    for tag in ("HIGH_ROLLER", "MID_ROLLER", "LOW_ROLLER"):
+        tags.discard(tag)
+    if profile.game_session_count and profile.total_wagered:
+        avg_bet = profile.total_wagered / profile.game_session_count
+        if avg_bet >= 100:
+            tags.add("HIGH_ROLLER")
+        elif avg_bet >= 20:
+            tags.add("MID_ROLLER")
+        else:
+            tags.add("LOW_ROLLER")
+
+    # Engajamento de jogo
+    tags.discard("ACTIVE_GAMER_7D")
+    tags.discard("INACTIVE_GAMER_7D")
+    if profile.last_game_at:
+        days_since_game = (now - profile.last_game_at).days
+        if days_since_game <= 7:
+            tags.add("ACTIVE_GAMER_7D")
+        elif profile.ftd_at:
+            # Depositou mas não jogou em mais de 7 dias
+            tags.add("INACTIVE_GAMER_7D")
+    elif profile.ftd_at:
+        # Depositou mas nunca teve game.started rastreado
+        tags.add("INACTIVE_GAMER_7D")
+
     profile.tags = sorted(tags)
     profile.save(update_fields=["tags"])
+
+
+@shared_task(time_limit=30)
+def update_game_session_stats(profile_id: int):
+    """
+    Calcula sessões de jogo em janelas de 7 e 30 dias a partir do banco.
+    Chamado após cada game.started — +1 incremental não cobre a janela rolante.
+    """
+    from apps.events.models import Event
+
+    try:
+        profile = Profile.objects.get(id=profile_id)
+    except Profile.DoesNotExist:
+        return
+
+    now = timezone.now()
+    base_qs = Event.objects.filter(
+        user_external_id=profile.external_id,
+        event_type__code="game.started",
+    )
+
+    attrs = dict(profile.custom_attributes or {})
+    attrs["last_7d_sessions"] = base_qs.filter(occurred_at__gte=now - timedelta(days=7)).count()
+    attrs["last_30d_sessions"] = base_qs.filter(occurred_at__gte=now - timedelta(days=30)).count()
+
+    profile.custom_attributes = attrs
+    profile.save(update_fields=["custom_attributes"])
 
 
 @shared_task(time_limit=30)

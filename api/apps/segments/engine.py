@@ -38,6 +38,7 @@ from apps.profiles.models import Profile
 
 # Whitelist de campos que podem ser filtrados (segurança crítica!)
 ALLOWED_FIELDS = {
+    # Financeiro
     "ltv",
     "total_deposits",
     "total_withdrawals",
@@ -46,21 +47,36 @@ ALLOWED_FIELDS = {
     "failed_deposit_count",
     "ftd_at",
     "last_deposit_at",
+    # Jogo
+    "game_session_count",
+    "last_game_at",
+    "favorite_game",
+    "favorite_game_category",
+    "favorite_game_provider",
+    "total_wagered",
+    "preferred_play_hour",
+    # Engajamento
     "last_login_at",
     "last_event_at",
     "registered_at",
-    "favorite_game",
+    # Perfil
     "country",
     "state",
     "city",
+    "profile_type",
+    "is_active",
+    "is_verified",
+    # Comunicação
     "consent_email",
     "consent_sms",
     "consent_push",
-    "tags",
+    "consent_whatsapp",
     "email_bounce_count",
     "sms_bounce_count",
     "email",
     "phone",
+    # Tags
+    "tags",
 }
 
 
@@ -138,8 +154,9 @@ class SegmentEngine:
         elif op == "in":
             return Q(**{f"{field}__in": value if isinstance(value, list) else [value]})
         elif op == "contains":
-            # Para JSONField (tags) e CharField (favorite_game)
             return Q(**{f"{field}__contains": value if isinstance(value, list) else [value]})
+        elif op == "not_contains":
+            return ~Q(**{f"{field}__contains": value if isinstance(value, list) else [value]})
         elif op == "icontains":
             return Q(**{f"{field}__icontains": value})
         elif op == "isnull":

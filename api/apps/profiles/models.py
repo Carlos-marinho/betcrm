@@ -47,6 +47,27 @@ class Profile(TimeStampedModel, SoftDeleteModel):
     registered_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     favorite_game = models.CharField(max_length=100, blank=True)
+
+    # ---------- Comportamento de jogo (recalculados a cada game.started) ----------
+    game_session_count = models.IntegerField(default=0)
+    last_game_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    favorite_game_category = models.CharField(
+        max_length=50, blank=True,
+        help_text="Categoria com mais sessões: slots, crash, live_casino, table",
+    )
+    favorite_game_provider = models.CharField(
+        max_length=100, blank=True,
+        help_text="Provedor com mais sessões: pragmatic_play, evolution, spribe…",
+    )
+    total_wagered = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Soma de todos os bet_amount recebidos em game.started",
+    )
+    preferred_play_hour = models.IntegerField(
+        null=True, blank=True,
+        help_text="Hora do dia (0-23) com maior frequência de sessões — usado para send-time optimization",
+    )
+
     ltv = models.DecimalField(
         max_digits=14, decimal_places=2, default=0,
         help_text="Lifetime Value (= total_deposits - total_withdrawals)",
