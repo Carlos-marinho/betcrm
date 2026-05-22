@@ -36,9 +36,27 @@ def _extract_safe_headers(meta: dict) -> dict[str, str]:
     return result
 
 
+_TRACKING_PROVIDERS = {"PostalEmailProvider", "MailgunEmailProvider"}
+
+# Chave de config que habilita tracking por provider
+_TRACKING_CONFIG_KEY: dict[str, str] = {
+    "PostalEmailProvider": "webhook_secret",
+    "MailgunEmailProvider": "webhook_signing_key",
+}
+
+
 class ProviderConfigSerializer(serializers.ModelSerializer):
     channel_display = serializers.CharField(source="get_channel_display", read_only=True)
     provider_class_display = serializers.CharField(source="get_provider_class_display", read_only=True)
+    tracking_enabled = serializers.SerializerMethodField()
+    daily_quota = serializers.IntegerField(allow_null=True, required=False, min_value=0)
+    monthly_quota = serializers.IntegerField(allow_null=True, required=False, min_value=0)
+
+    def get_tracking_enabled(self, obj) -> bool:
+        key = _TRACKING_CONFIG_KEY.get(obj.provider_class)
+        if not key:
+            return False
+        return bool((obj.config or {}).get(key))
 
     class Meta:
         model = ProviderConfig
@@ -47,6 +65,7 @@ class ProviderConfigSerializer(serializers.ModelSerializer):
             "provider_class", "provider_class_display",
             "config", "is_active", "is_primary", "priority",
             "daily_quota", "monthly_quota",
+            "tracking_enabled",
             "created_at", "updated_at",
         ]
 
@@ -82,6 +101,52 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ["channel", "status"]
     search_fields = ["profile__external_id", "template_code", "recipient"]
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def send_message(request):
+    """
+    Envia uma mensagem manual única para um perfil.
+
+    POST /api/v1/messaging/send/
+    Body: { profile_id, channel, template_code, context?, bypass_quiet_hours?, bypass_frequency_cap? }
+    """
+    profile_id = request.data.get("profile_id")
+    channel = request.data.get("channel")
+    template_code = request.data.get("template_code")
+
+    if not all([profile_id, channel, template_code]):
+        return Response(
+            {"error": "profile_id, channel e template_code são obrigatórios"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        from apps.profiles.models import Profile
+        profile = Profile.objects.get(id=profile_id)
+    except Profile.DoesNotExist:
+        return Response({"error": "profile_not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+    from .services import MessagingService
+
+    result = MessagingService().send(
+        profile=profile,
+        channel=channel,
+        template_code=template_code,
+        context=request.data.get("context") or {},
+        campaign_id="manual_send",
+        bypass_quiet_hours=bool(request.data.get("bypass_quiet_hours", False)),
+        bypass_frequency_cap=bool(request.data.get("bypass_frequency_cap", False)),
+    )
+
+    if result.success:
+        return Response({"status": "sent", "message_id": result.message_id})
+
+    return Response(
+        {"status": "failed", "error": result.error},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 @api_view(["POST"])

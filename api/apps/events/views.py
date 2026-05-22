@@ -21,7 +21,7 @@ from apps.core.models import SystemSetting
 from apps.core.utils import hmac_signature_matches, verify_hmac_signature
 
 from .models import Event, EventType
-from .serializers import EventIngestSerializer, EventListSerializer
+from .serializers import EventDetailSerializer, EventIngestSerializer, EventListSerializer
 from .tasks import process_event
 
 logger = logging.getLogger(__name__)
@@ -287,6 +287,23 @@ def ingest_meta_system_event(request):
         {"status": "accepted", "event_id": event.id},
         status=status.HTTP_202_ACCEPTED,
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_event_detail(request, event_id):
+    """
+    GET /api/v1/events/<event_id>/
+
+    Detalhe completo de um evento: payload, metadados e perfil do usuário.
+    """
+    try:
+        event = Event.objects.select_related("event_type").get(id=event_id)
+    except Event.DoesNotExist:
+        return Response({"error": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = EventDetailSerializer(event)
+    return Response(serializer.data)
 
 
 @api_view(["GET"])
