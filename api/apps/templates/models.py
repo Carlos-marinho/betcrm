@@ -9,6 +9,51 @@ from django.db import models
 from apps.core.models import TimeStampedModel
 
 
+class EmailAsset(TimeStampedModel):
+    """Imagem/asset reutilizável em templates de email (banners, logos, rodapés)."""
+
+    ASSET_TYPE_CHOICES = [
+        ("banner", "Banner principal"),
+        ("footer_logo", "Logo do rodapé"),
+        ("logo", "Logo geral"),
+        ("general", "Imagem geral"),
+    ]
+
+    name = models.CharField(max_length=200)
+    folder = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Pasta de organização (ex: 'banners', 'logos', 'campanhas/verao')",
+    )
+    file = models.FileField(upload_to="email_assets/")
+    asset_type = models.CharField(
+        max_length=20, choices=ASSET_TYPE_CHOICES, default="general", db_index=True
+    )
+    alt_text = models.CharField(max_length=200, blank=True)
+    is_global_footer = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Usada como imagem padrão no rodapé de todos os emails marketing",
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.asset_type})"
+
+    def save(self, *args, **kwargs):
+        # Garante unicidade do global footer
+        if self.is_global_footer:
+            EmailAsset.objects.filter(is_global_footer=True).exclude(pk=self.pk).update(
+                is_global_footer=False
+            )
+        super().save(*args, **kwargs)
+
+
 class MessageTemplate(TimeStampedModel):
     """
     Template de mensagem versionado.
@@ -62,6 +107,16 @@ class MessageTemplate(TimeStampedModel):
     include_unsubscribe = models.BooleanField(
         default=True,
         help_text="Inclui link de unsubscribe (obrigatório em marketing)",
+    )
+
+    # Assets
+    banner_asset = models.ForeignKey(
+        "EmailAsset",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="template_banners",
+        help_text="Banner principal exibido no topo do email",
     )
 
     class Meta:

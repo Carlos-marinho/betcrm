@@ -105,6 +105,9 @@ class TemplateService:
         )
 
         if channel == "email":
+            # Adiciona URLs de assets ao contexto
+            context.update(cls._build_asset_context(template))
+
             content.subject = env.from_string(template.subject or "").render(**context)
             content.html = env.from_string(template.html_body or "").render(**context)
             content.text = env.from_string(template.text_body or "").render(**context)
@@ -115,7 +118,10 @@ class TemplateService:
             if template.include_unsubscribe and template.category == "marketing":
                 unsub_url = cls._build_unsubscribe_url(profile)
                 if "{{ unsubscribe_url }}" not in template.html_body:
-                    content.html = cls._inject_unsubscribe_footer(content.html, unsub_url)
+                    footer_logo_url = context.get("footer_logo_url", "")
+                    content.html = cls._inject_unsubscribe_footer(
+                        content.html, unsub_url, footer_logo_url
+                    )
 
         else:  # sms, push, whatsapp
             content.body = env.from_string(template.body or "").render(**context)
@@ -165,15 +171,26 @@ class TemplateService:
             "last_name": profile.last_name or "",
             "email": profile.email or "",
             "phone": profile.phone or "",
-            # Comportamento
+            # Comportamento financeiro
             "total_deposits": profile.total_deposits,
             "deposit_count": profile.deposit_count,
             "ltv": profile.ltv,
+            # Comportamento de jogo
             "favorite_game": profile.favorite_game or "Aviator",
+            "favorite_game_category": profile.favorite_game_category or "slots",
+            "favorite_game_provider": profile.favorite_game_provider or "",
+            "game_session_count": profile.game_session_count or 0,
+            "total_wagered": profile.total_wagered or 0,
+            "last_game_at": profile.last_game_at,
+            "top_games": (profile.custom_attributes or {}).get("top_games", []),
             # Tags / atributos
             "tags": profile.tags or [],
             "is_vip": any(t.startswith("VIP_") for t in (profile.tags or [])),
+            "vip_tier": next((t.replace("VIP_", "").capitalize() for t in (profile.tags or []) if t.startswith("VIP_")), ""),
             "is_ftd": profile.has_tag("FTD"),
+            "is_slots_player": profile.has_tag("SLOTS_PLAYER"),
+            "is_crash_player": profile.has_tag("CRASH_PLAYER"),
+            "is_live_player": profile.has_tag("LIVE_PLAYER"),
             # URLs úteis
             "site_url": getattr(settings, "PUBLIC_SITE_URL", "https://yourdomain.com"),
             "deposit_url": getattr(settings, "DEPOSIT_URL", "https://yourdomain.com/depositar"),
@@ -181,6 +198,25 @@ class TemplateService:
             "unsubscribe_url": cls._build_unsubscribe_url(profile),
             # Extra (do fluxo / evento)
             **(extra or {}),
+        }
+
+    @classmethod
+    def _build_asset_context(cls, template: MessageTemplate) -> dict:
+        """Monta URLs de assets (banner do template + footer global)."""
+        from .models import EmailAsset
+
+        banner_url = ""
+        if template.banner_asset_id and template.banner_asset and template.banner_asset.file:
+            banner_url = template.banner_asset.file.url
+
+        global_footer = (
+            EmailAsset.objects.filter(is_global_footer=True, is_active=True).first()
+        )
+        footer_logo_url = global_footer.file.url if global_footer and global_footer.file else ""
+
+        return {
+            "banner_url": banner_url,
+            "footer_logo_url": footer_logo_url,
         }
 
     @classmethod
@@ -197,12 +233,18 @@ class TemplateService:
         return f"{base}?token={token}&id={profile.external_id}"
 
     @classmethod
-    def _inject_unsubscribe_footer(cls, html: str, unsub_url: str) -> str:
-        """Injeta footer de unsubscribe se não existir."""
+    def _inject_unsubscribe_footer(cls, html: str, unsub_url: str, footer_logo_url: str = "") -> str:
+        """Injeta footer de unsubscribe com logo opcional."""
+        logo_block = (
+            f'<img src="{footer_logo_url}" alt="Logo" style="max-height:32px; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;" />'
+            if footer_logo_url
+            else ""
+        )
         footer = f"""
-<div style="text-align:center; padding:20px; font-size:11px; color:#666;">
-    <a href="{unsub_url}" style="color:#888;">Cancelar inscrição</a> |
-    Jogue com responsabilidade. +18.
+<div style="text-align:center; padding:24px 20px 16px; font-size:11px; color:#888; border-top:1px solid #e5e5e5; margin-top:24px;">
+    {logo_block}
+    <a href="{unsub_url}" style="color:#aaa; text-decoration:underline;">Cancelar inscrição</a>
+    &nbsp;·&nbsp; Jogue com responsabilidade. +18.
 </div>
 """
         if "</body>" in html:

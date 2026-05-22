@@ -2,15 +2,80 @@
 
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
-from .models import AbTest, AbTestVariant, MessageTemplate
+from .models import AbTest, AbTestVariant, EmailAsset, MessageTemplate
 
+
+# ── Asset serializer / viewset ─────────────────────────────────────────────────
+
+class EmailAssetSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailAsset
+        fields = "__all__"
+
+    def get_file_url(self, obj: EmailAsset) -> str | None:
+        request = self.context.get("request")
+        if not obj.file:
+            return None
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
+
+
+class EmailAssetViewSet(viewsets.ModelViewSet):
+    queryset = EmailAsset.objects.all()
+    serializer_class = EmailAssetSerializer
+    filterset_fields = ["asset_type", "is_active", "is_global_footer", "folder"]
+    search_fields = ["name", "folder"]
+
+    def get_parsers(self):
+        try:
+            if self.action in ("create", "update", "partial_update"):
+                return [MultiPartParser(), FormParser()]
+        except AttributeError:
+            pass
+        return super().get_parsers()
+
+    @action(detail=False, methods=["get"])
+    def folders(self, request):
+        """Retorna lista de pastas únicas existentes."""
+        folders = (
+            EmailAsset.objects.exclude(folder="")
+            .values_list("folder", flat=True)
+            .distinct()
+            .order_by("folder")
+        )
+        return Response(list(folders))
+
+    @action(detail=True, methods=["post"])
+    def set_global_footer(self, request, pk=None):
+        """Define este asset como logo/imagem padrão do rodapé global."""
+        asset = self.get_object()
+        asset.is_global_footer = True
+        asset.save(update_fields=["is_global_footer"])
+        return Response(self.get_serializer(asset).data)
+
+
+# ── Template serializer / viewset ──────────────────────────────────────────────
 
 class MessageTemplateSerializer(serializers.ModelSerializer):
+    banner_asset_url = serializers.SerializerMethodField()
+
     class Meta:
         model = MessageTemplate
         fields = "__all__"
+
+    def get_banner_asset_url(self, obj: MessageTemplate) -> str | None:
+        request = self.context.get("request")
+        if not obj.banner_asset or not obj.banner_asset.file:
+            return None
+        if request:
+            return request.build_absolute_uri(obj.banner_asset.file.url)
+        return obj.banner_asset.file.url
 
 
 class AbTestVariantSerializer(serializers.ModelSerializer):
