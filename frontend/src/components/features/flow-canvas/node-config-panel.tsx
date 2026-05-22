@@ -155,16 +155,42 @@ export function NodeConfigPanel({ node, onChange, onClose }: NodeConfigPanelProp
             <Field label="Canal">
               <ConfigSelect
                 value={String(node.config.channel ?? "")}
-                onChange={(v) => set("channel", v)}
+                onChange={(v) => {
+                  onChange({
+                    ...node,
+                    config: {
+                      ...node.config,
+                      channel: v,
+                      from_email: "",
+                      from_name: "",
+                    },
+                  });
+                }}
                 options={CHANNELS}
                 placeholder="Selecionar canal..."
               />
             </Field>
             {node.config.channel === "email" ? (
-              <EmailTemplatePicker
-                value={String(node.config.template_code ?? "")}
-                onChange={(code) => set("template_code", code)}
-              />
+              <>
+                <EmailTemplatePicker
+                  value={String(node.config.template_code ?? "")}
+                  onChange={(code) => set("template_code", code)}
+                />
+                <EmailFromPicker
+                  valueEmail={String(node.config.from_email ?? "")}
+                  valueName={String(node.config.from_name ?? "")}
+                  onChange={(from) => {
+                    onChange({
+                      ...node,
+                      config: {
+                        ...node.config,
+                        from_email: from?.email ?? "",
+                        from_name: from?.name ?? "",
+                      },
+                    });
+                  }}
+                />
+              </>
             ) : (
               <Field label="Código do template">
                 <ConfigInput
@@ -826,6 +852,120 @@ function TestWebhookSection({
 }
 
 // ── Email Template Picker ─────────────────────────────────────────────────────
+
+interface FromAddressOption {
+  email: string;
+  name: string;
+  label: string;
+}
+
+function configString(config: Record<string, unknown> | undefined, key: string) {
+  const value = config?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getFromAddressOptions(provider: { config: Record<string, unknown> } | null): FromAddressOption[] {
+  if (!provider?.config) return [];
+
+  const config = provider.config;
+  const options: FromAddressOption[] = [];
+  const defaultEmail = configString(config, "default_from_email") || configString(config, "from_email");
+  const defaultName = configString(config, "default_from_name") || configString(config, "from_name");
+  const domain = configString(config, "domain") || defaultEmail.split("@")[1] || "";
+
+  if (defaultEmail) {
+    options.push({
+      email: defaultEmail,
+      name: defaultName,
+      label: defaultName ? `${defaultName} <${defaultEmail}>` : defaultEmail,
+    });
+  }
+
+  const extra = Array.isArray(config.from_addresses) ? config.from_addresses : [];
+  extra.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const record = item as Record<string, unknown>;
+    const prefix = typeof record.prefix === "string" ? record.prefix.trim() : "";
+    if (!prefix) return;
+    const email = prefix.includes("@") || !domain ? prefix : `${prefix}@${domain}`;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (options.some((option) => option.email === email)) return;
+    options.push({
+      email,
+      name,
+      label: name ? `${name} <${email}>` : email,
+    });
+  });
+
+  return options;
+}
+
+function EmailFromPicker({
+  valueEmail,
+  valueName,
+  onChange,
+}: {
+  valueEmail: string;
+  valueName: string;
+  onChange: (from: FromAddressOption | null) => void;
+}) {
+  const [options, setOptions] = useState<FromAddressOption[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/messaging/providers/?channel=email&is_active=true&page_size=200")
+      .then(({ data }) => {
+        if (cancelled) return;
+        const providers = (data.results ?? data) as Array<{
+          is_primary: boolean;
+          config: Record<string, unknown>;
+        }>;
+        const provider = providers.find((p) => p.is_primary) ?? providers[0] ?? null;
+        setOptions(getFromAddressOptions(provider));
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading || options.length === 0) return null;
+
+  const selectedValue = valueEmail || "__template_default__";
+
+  return (
+    <Field label="Remetente">
+      <ConfigSelect
+        value={selectedValue}
+        onChange={(value) => {
+          if (value === "__template_default__") {
+            onChange(null);
+            return;
+          }
+          const option = options.find((item) => item.email === value) ?? null;
+          onChange(option);
+        }}
+        options={[
+          { value: "__template_default__", label: "Padrão do template/provedor" },
+          ...options.map((option) => ({ value: option.email, label: option.label })),
+        ]}
+        placeholder="Selecionar remetente..."
+      />
+      {valueEmail && (
+        <p className="text-[10px] mt-1 font-mono" style={{ color: "rgba(255,255,255,0.24)" }}>
+          {valueName ? `${valueName} <${valueEmail}>` : valueEmail}
+        </p>
+      )}
+    </Field>
+  );
+}
 
 interface TemplateOption {
   id: number;

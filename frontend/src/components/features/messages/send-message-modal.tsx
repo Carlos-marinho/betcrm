@@ -44,10 +44,56 @@ const CHANNELS = [
 ] as const;
 
 type Channel = (typeof CHANNELS)[number]["value"];
+type FromAddressOption = {
+  email: string;
+  name: string;
+  label: string;
+};
 
 interface Props {
   open: boolean;
   onClose: () => void;
+}
+
+function configString(config: Record<string, unknown> | undefined, key: string) {
+  const value = config?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getFromAddressOptions(provider: { config: Record<string, unknown> } | undefined): FromAddressOption[] {
+  if (!provider?.config) return [];
+
+  const config = provider.config;
+  const options: FromAddressOption[] = [];
+  const defaultEmail = configString(config, "default_from_email") || configString(config, "from_email");
+  const defaultName = configString(config, "default_from_name") || configString(config, "from_name");
+  const domain = configString(config, "domain") || defaultEmail.split("@")[1] || "";
+
+  if (defaultEmail) {
+    options.push({
+      email: defaultEmail,
+      name: defaultName,
+      label: defaultName ? `${defaultName} <${defaultEmail}>` : defaultEmail,
+    });
+  }
+
+  const extra = Array.isArray(config.from_addresses) ? config.from_addresses : [];
+  extra.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const record = item as Record<string, unknown>;
+    const prefix = typeof record.prefix === "string" ? record.prefix.trim() : "";
+    if (!prefix) return;
+    const email = prefix.includes("@") || !domain ? prefix : `${prefix}@${domain}`;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (options.some((option) => option.email === email)) return;
+    options.push({
+      email,
+      name,
+      label: name ? `${name} <${email}>` : email,
+    });
+  });
+
+  return options;
 }
 
 export function SendMessageModal({ open, onClose }: Props) {
@@ -55,6 +101,7 @@ export function SendMessageModal({ open, onClose }: Props) {
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [channel, setChannel] = useState<Channel>("email");
   const [templateCode, setTemplateCode] = useState("");
+  const [selectedFrom, setSelectedFrom] = useState("");
   const [bypassQuietHours, setBypassQuietHours] = useState(false);
   const [bypassFrequencyCap, setBypassFrequencyCap] = useState(false);
   const [sent, setSent] = useState(false);
@@ -74,6 +121,8 @@ export function SendMessageModal({ open, onClose }: Props) {
     providersData?.results.find((p) => p.is_active && p.is_primary) ??
     providersData?.results.find((p) => p.is_active);
   const trackingEnabled = activeProvider?.tracking_enabled ?? false;
+  const fromOptions = getFromAddressOptions(activeProvider);
+  const selectedFromOption = fromOptions.find((option) => option.email === selectedFrom);
 
   const selectedProfile = profilesData?.results.find(
     (p) => p.id === selectedProfileId
@@ -84,6 +133,7 @@ export function SendMessageModal({ open, onClose }: Props) {
     setSelectedProfileId(null);
     setChannel("email");
     setTemplateCode("");
+    setSelectedFrom("");
     setBypassQuietHours(false);
     setBypassFrequencyCap(false);
     setSent(false);
@@ -98,6 +148,8 @@ export function SendMessageModal({ open, onClose }: Props) {
       profile_id: selectedProfileId,
       channel,
       template_code: templateCode,
+      from_email: channel === "email" ? selectedFromOption?.email : undefined,
+      from_name: channel === "email" ? selectedFromOption?.name : undefined,
       bypass_quiet_hours: bypassQuietHours,
       bypass_frequency_cap: bypassFrequencyCap,
     };
@@ -184,7 +236,7 @@ export function SendMessageModal({ open, onClose }: Props) {
                 {CHANNELS.map(({ value, label, Icon }) => (
                   <button
                     key={value}
-                    onClick={() => { setChannel(value); setTemplateCode(""); }}
+                    onClick={() => { setChannel(value); setTemplateCode(""); setSelectedFrom(""); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                       channel === value
                         ? "bg-gold/10 border-gold/30 text-gold"
@@ -197,6 +249,32 @@ export function SendMessageModal({ open, onClose }: Props) {
                 ))}
               </div>
             </div>
+
+            {channel === "email" && fromOptions.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Remetente
+                </Label>
+                <Select
+                  value={selectedFrom || "__template_default__"}
+                  onValueChange={(value) => setSelectedFrom(value === "__template_default__" ? "" : value)}
+                >
+                  <SelectTrigger className="bg-background border-border">
+                    <SelectValue placeholder="Usar padrão..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__template_default__">
+                      Padrão do template/provedor
+                    </SelectItem>
+                    {fromOptions.map((option) => (
+                      <SelectItem key={`${option.name}:${option.email}`} value={option.email}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Template */}
             <div className="space-y-2">

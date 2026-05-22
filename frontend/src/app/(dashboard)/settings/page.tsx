@@ -50,15 +50,6 @@ const DEV_LINKS = [
   },
 ];
 
-const SYSTEM_INFO = [
-  { label: "Versão", value: "0.1.0" },
-  { label: "API URL", value: API_BASE },
-  { label: "Framework", value: "Django 5 + Next.js 15" },
-  { label: "Vertical", value: "iGaming (BR)" },
-  { label: "Ambiente", value: process.env.NODE_ENV || "development" },
-  { label: "Região", value: "Brasil (Hostinger KVM4)" },
-];
-
 const PROVIDER_CLASSES = [
   { value: "PostalEmailProvider", label: "Postal (self-hosted)", channel: "email" },
   { value: "MailgunEmailProvider", label: "Mailgun", channel: "email" },
@@ -76,6 +67,11 @@ type ConfigField = {
   required?: boolean;
   placeholder?: string;
   aliases?: string[];
+};
+
+type FromAddressConfig = {
+  name: string;
+  prefix: string;
 };
 
 const TRACKING_PROVIDERS = new Set(["PostalEmailProvider", "MailgunEmailProvider"]);
@@ -237,6 +233,35 @@ function configValueToInputValue(value: unknown) {
   return JSON.stringify(value);
 }
 
+function normalizeFromAddresses(value: unknown): FromAddressConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      return {
+        name: typeof record.name === "string" ? record.name : "",
+        prefix: typeof record.prefix === "string"
+          ? record.prefix
+          : typeof record.email === "string"
+            ? record.email.split("@")[0] ?? ""
+            : "",
+      };
+    })
+    .filter((item): item is FromAddressConfig => !!item);
+}
+
+function getFromAddressDomain(config: Record<string, unknown>) {
+  const domain = configValueToInputValue(config.domain).trim();
+  if (domain) return domain;
+
+  const defaultEmail = configValueToInputValue(
+    config.default_from_email ?? config.from_email
+  ).trim();
+  const atIndex = defaultEmail.lastIndexOf("@");
+  return atIndex >= 0 ? defaultEmail.slice(atIndex + 1) : "";
+}
+
 function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
   const createMutation = useCreateProvider();
   const updateMutation = useUpdateProvider();
@@ -269,6 +294,10 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
     setConfigFields((prev) => ({ ...prev, [key]: value }));
   }
 
+  function setFromAddresses(value: FromAddressConfig[]) {
+    setConfigFields((prev) => ({ ...prev, from_addresses: value }));
+  }
+
   function toggleConfigFieldVisibility(key: string) {
     setVisibleConfigFields((prev) => {
       const next = new Set(prev);
@@ -282,9 +311,20 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
   }
 
   async function onSubmit(values: ProviderForm) {
+    const normalizedConfig = { ...configFields };
+    if (values.channel === "email") {
+      normalizedConfig.from_addresses = normalizeFromAddresses(configFields.from_addresses)
+        .map((item) => ({
+          name: item.name.trim(),
+          prefix: item.prefix.trim(),
+        }))
+        .filter((item) => item.prefix);
+    } else {
+      delete normalizedConfig.from_addresses;
+    }
     const payload = {
       ...values,
-      config: configFields,
+      config: normalizedConfig,
       priority: Number.isNaN(values.priority) ? 100 : values.priority,
       daily_quota: (values.daily_quota === undefined || Number.isNaN(values.daily_quota as number)) ? null : values.daily_quota,
       monthly_quota: (values.monthly_quota === undefined || Number.isNaN(values.monthly_quota as number)) ? null : values.monthly_quota,
@@ -404,6 +444,14 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
             </div>
           )}
 
+          {watchChannel === "email" && watchProviderClass && (
+            <FromAddressesEditor
+              value={normalizeFromAddresses(configFields.from_addresses)}
+              domain={getFromAddressDomain(configFields)}
+              onChange={setFromAddresses}
+            />
+          )}
+
           {/* Webhook tracking URL (for tracking-capable providers when editing) */}
           {isEditing && provider && TRACKING_PROVIDERS.has(watchProviderClass) && (
             <div className="space-y-2 p-4 rounded-lg border border-teal/20 bg-teal/[0.03]">
@@ -488,6 +536,98 @@ function ProviderModal({ open, onClose, provider }: ProviderModalProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FromAddressesEditor({
+  value,
+  domain,
+  onChange,
+}: {
+  value: FromAddressConfig[];
+  domain: string;
+  onChange: (value: FromAddressConfig[]) => void;
+}) {
+  function update(index: number, key: keyof FromAddressConfig, nextValue: string) {
+    onChange(value.map((item, i) => (i === index ? { ...item, [key]: nextValue } : item)));
+  }
+
+  function addAddress() {
+    onChange([...value, { name: "", prefix: "" }]);
+  }
+
+  function removeAddress(index: number) {
+    onChange(value.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="space-y-3 p-4 rounded-lg border border-border bg-white/[0.02]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Remetentes disponíveis
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={addAddress}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Adicionar
+        </button>
+      </div>
+
+      {value.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Sem remetentes extras. O envio usa o From padrão configurado acima.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {value.map((item, index) => {
+            const preview = item.prefix
+              ? item.prefix.includes("@") || !domain
+                ? item.prefix
+                : `${item.prefix}@${domain}`
+              : domain
+                ? `prefixo@${domain}`
+                : "prefixo@dominio";
+
+            return (
+              <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Nome</Label>
+                  <Input
+                    value={item.name}
+                    onChange={(e) => update(index, "name", e.target.value)}
+                    placeholder="Betnice Promo"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Prefixo</Label>
+                  <Input
+                    value={item.prefix}
+                    onChange={(e) => update(index, "prefix", e.target.value)}
+                    placeholder="promo"
+                    className="font-data"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 font-data">{preview}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAddress(index)}
+                  className="mt-6 w-9 h-9 rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-colors flex items-center justify-center"
+                  aria-label="Remover remetente"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -792,25 +932,6 @@ export default function SettingsPage() {
                     </a>
                   );
                 })}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
-                Informações do sistema
-              </h2>
-              <div className="card-vault p-5">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {SYSTEM_INFO.map((item) => (
-                    <div key={item.label}>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{item.label}</p>
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-data text-sm text-foreground">{item.value}</p>
-                        {item.label === "API URL" && <CopyButton value={item.value} />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           </TabsContent>

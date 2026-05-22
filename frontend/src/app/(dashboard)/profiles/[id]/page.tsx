@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useProfile, useProfileTimeline } from "@/lib/hooks";
+import { useProfile, useProfileTimeline, type TimelineActivity } from "@/lib/hooks";
 import {
   ArrowLeft,
   User,
@@ -366,36 +366,161 @@ export default function ProfileDetailPage() {
 
 const EVENT_COLORS: Record<string, { badge: string; dot: string }> = {
   "payment.deposit.completed": { badge: "badge-teal", dot: "bg-teal" },
-  "payment.deposit.started": { badge: "badge-gold", dot: "bg-gold/60" },
-  "payment.deposit.failed": { badge: "badge-red", dot: "bg-destructive" },
-  "user.register": { badge: "badge-gold", dot: "bg-gold" },
-  "user.login": { badge: "badge-muted", dot: "bg-muted-foreground/30" },
-  "payment.withdrawal.request": { badge: "badge-muted", dot: "bg-muted-foreground/30" },
-  "payment.withdrawal.completed": { badge: "badge-teal", dot: "bg-teal/60" },
-  "game.started": { badge: "badge-muted", dot: "bg-muted-foreground/20" },
-  "bonus.activated": { badge: "badge-teal", dot: "bg-teal/40" },
-  "bonus.expired": { badge: "badge-red", dot: "bg-destructive/60" },
-  "cashback.paid": { badge: "badge-teal", dot: "bg-teal" },
+  "payment.deposit.started":   { badge: "badge-gold", dot: "bg-gold/60" },
+  "payment.deposit.failed":    { badge: "badge-red",  dot: "bg-destructive" },
+  "user.register":             { badge: "badge-gold", dot: "bg-gold" },
+  "user.login":                { badge: "badge-muted", dot: "bg-muted-foreground/30" },
+  "payment.withdrawal.request":   { badge: "badge-muted", dot: "bg-muted-foreground/30" },
+  "payment.withdrawal.completed": { badge: "badge-teal",  dot: "bg-teal/60" },
+  "payment.withdrawal.rejected":  { badge: "badge-red",   dot: "bg-destructive/60" },
+  "game.started":    { badge: "badge-muted", dot: "bg-muted-foreground/20" },
+  "bonus.activated": { badge: "badge-teal",  dot: "bg-teal/40" },
+  "bonus.expired":   { badge: "badge-red",   dot: "bg-destructive/60" },
+  "cashback.paid":   { badge: "badge-teal",  dot: "bg-teal" },
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  "user.register":                 "Cadastro",
+  "payment.deposit.completed":     "Depósito confirmado",
+  "payment.deposit.started":       "Depósito iniciado",
+  "payment.deposit.failed":        "Depósito falhou",
+  "payment.withdrawal.request":    "Saque solicitado",
+  "payment.withdrawal.completed":  "Saque concluído",
+  "payment.withdrawal.rejected":   "Saque rejeitado",
+  "bonus.activated":   "Bônus ativado",
+  "bonus.completed":   "Bônus concluído",
+  "bonus.expired":     "Bônus expirado",
+  "cashback.paid":     "Cashback pago",
 };
 
 const MSG_STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  queued:      { icon: Clock,              color: "text-muted-foreground", label: "Enfileirada" },
-  sent:        { icon: MessageSquare,      color: "text-muted-foreground", label: "Enviada" },
-  delivered:   { icon: CheckCircle,        color: "text-teal",             label: "Entregue" },
-  opened:      { icon: MailOpen,           color: "text-gold",             label: "Aberta" },
-  clicked:     { icon: MousePointerClick,  color: "text-gold",             label: "Clicada" },
-  bounced:     { icon: XCircle,            color: "text-destructive",      label: "Bounce" },
-  failed:      { icon: XCircle,            color: "text-destructive",      label: "Falhou" },
-  rejected:    { icon: XCircle,            color: "text-muted-foreground", label: "Rejeitada" },
+  queued:      { icon: Clock,             color: "text-muted-foreground", label: "Enfileirada" },
+  sent:        { icon: MessageSquare,     color: "text-muted-foreground", label: "Enviada" },
+  delivered:   { icon: CheckCircle,       color: "text-teal",             label: "Entregue" },
+  opened:      { icon: MailOpen,          color: "text-gold",             label: "Aberta" },
+  clicked:     { icon: MousePointerClick, color: "text-gold",             label: "Clicada" },
+  bounced:     { icon: XCircle,           color: "text-destructive",      label: "Bounce" },
+  failed:      { icon: XCircle,           color: "text-destructive",      label: "Falhou" },
+  rejected:    { icon: XCircle,           color: "text-muted-foreground", label: "Rejeitada" },
 };
 
 const CHANNEL_ICONS_MSG: Record<string, React.ElementType> = {
   email: Mail, sms: MessageSquare, push: Bell, whatsapp: MessageCircle,
 };
 
+const FLOW_STATE_CONFIG: Record<string, { label: string; color: string }> = {
+  completed:    { label: "Concluído", color: "text-teal" },
+  goal_reached: { label: "Objetivo atingido", color: "text-teal" },
+  exited:       { label: "Saiu", color: "text-muted-foreground" },
+  failed:       { label: "Falhou", color: "text-destructive" },
+};
+
+function ActivityItem({ item }: { item: TimelineActivity }) {
+  const d = item.data;
+
+  if (item.kind === "tag_change") {
+    return (
+      <div className="relative pb-4">
+        <div className="absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background bg-muted-foreground/40" />
+        <div className="pl-3">
+          <div className="flex items-start gap-2 flex-wrap">
+            <Tag className="w-3 h-3 text-muted-foreground/50 mt-0.5 shrink-0" />
+            <span className="text-xs text-muted-foreground/70 font-medium mt-0.5">Mudança de tags</span>
+            <span className="text-xs text-muted-foreground/60 mt-0.5 ml-auto">
+              {formatDistanceToNow(new Date(item.occurred_at), { locale: ptBR, addSuffix: true })}
+            </span>
+          </div>
+          <div className="pl-5 mt-1 flex flex-wrap gap-1">
+            {(d.added ?? []).map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal/10 border border-teal/20 text-teal">
+                +{t}
+              </span>
+            ))}
+            {(d.removed ?? []).map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-destructive/10 border border-destructive/20 text-destructive">
+                −{t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "flow_entry") {
+    return (
+      <div className="relative pb-4">
+        <div className="absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background bg-gold/60" />
+        <div className="pl-3 flex items-start gap-2 flex-wrap">
+          <Zap className="w-3 h-3 text-gold/70 mt-0.5 shrink-0" />
+          <span className="badge-gold">Entrou em jornada</span>
+          <span className="text-xs font-data text-muted-foreground">{d.flow_name ?? d.flow_code}</span>
+          <span className="text-xs text-muted-foreground/60 mt-0.5 ml-auto">
+            {formatDistanceToNow(new Date(item.occurred_at), { locale: ptBR, addSuffix: true })}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (item.kind === "flow_exit") {
+    const stateCfg = FLOW_STATE_CONFIG[d.state ?? ""] ?? { label: d.state ?? "Saiu", color: "text-muted-foreground" };
+    return (
+      <div className="relative pb-4">
+        <div className="absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background bg-muted-foreground/30" />
+        <div className="pl-3 flex items-start gap-2 flex-wrap">
+          <Zap className="w-3 h-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+          <span className="badge-muted">Saiu da jornada</span>
+          <span className="text-xs font-data text-muted-foreground">{d.flow_name ?? d.flow_code}</span>
+          <span className={`text-[10px] font-medium ${stateCfg.color}`}>{stateCfg.label}</span>
+          {d.duration_hours != null && (
+            <span className="text-[10px] text-muted-foreground/50">{d.duration_hours}h</span>
+          )}
+          <span className="text-xs text-muted-foreground/60 mt-0.5 ml-auto">
+            {formatDistanceToNow(new Date(item.occurred_at), { locale: ptBR, addSuffix: true })}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function payloadString(payload: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value !== undefined && value !== null && value !== "") return String(value);
+  }
+  return "";
+}
+
+function eventAmount(type: string, payload: Record<string, unknown>) {
+  if (![
+    "payment.deposit.completed",
+    "payment.withdrawal.request",
+    "payment.withdrawal.completed",
+    "cashback.paid",
+  ].includes(type)) return "";
+
+  const raw = payloadString(payload, "amount");
+  if (!raw) return "";
+  const value = Math.abs(Number(raw));
+  if (!Number.isFinite(value)) return "";
+  return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function eventMeta(type: string, payload: Record<string, unknown>) {
+  if (type === "payment.deposit.failed") return payloadString(payload, "failureReason", "reason");
+  if (type === "bonus.activated") return payloadString(payload, "bonusCode", "bonus_code");
+  return "";
+}
+
+type ActiveTab = "all" | "events" | "messages" | "flows" | "tags";
+
 function TimelineSection({ profileId }: { profileId: number }) {
-  const { data, isLoading } = useProfileTimeline(profileId);
-  const [activeTab, setActiveTab] = useState<"all" | "events" | "messages">("all");
+  const { data, isLoading, isError } = useProfileTimeline(profileId);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
   const [expandedPayloads, setExpandedPayloads] = useState<Set<number>>(new Set());
 
   function togglePayload(id: number) {
@@ -408,7 +533,8 @@ function TimelineSection({ profileId }: { profileId: number }) {
 
   type TimelineItem =
     | { kind: "event"; id: number; type: string; occurred_at: string; payload: Record<string, unknown> }
-    | { kind: "message"; id: number; channel: string; template: string | null; status: string; sent_at: string | null };
+    | { kind: "message"; id: number; channel: string; template: string | null; status: string; sent_at: string | null; created_at?: string | null }
+    | { kind: "activity"; item: TimelineActivity; occurred_at: string };
 
   const allItems: TimelineItem[] = [
     ...(data?.events ?? []).map((e) => ({
@@ -418,31 +544,49 @@ function TimelineSection({ profileId }: { profileId: number }) {
     ...(data?.messages ?? []).map((m) => ({
       kind: "message" as const,
       id: m.id, channel: m.channel, template: m.template,
-      status: m.status, sent_at: m.sent_at,
+      status: m.status, sent_at: m.sent_at, created_at: m.created_at,
+    })),
+    ...(data?.activities ?? []).map((a) => ({
+      kind: "activity" as const,
+      item: a,
+      occurred_at: a.occurred_at,
     })),
   ].sort((a, b) => {
-    const aDate = a.kind === "event" ? a.occurred_at : (a.sent_at ?? "");
-    const bDate = b.kind === "event" ? b.occurred_at : (b.sent_at ?? "");
-    return new Date(bDate).getTime() - new Date(aDate).getTime();
+    const getDate = (i: typeof a) =>
+      i.kind === "message" ? (i.sent_at ?? i.created_at ?? "") : i.occurred_at;
+    return new Date(getDate(b)).getTime() - new Date(getDate(a)).getTime();
   });
 
-  const filtered =
+  const flowActivities = (data?.activities ?? []).filter(
+    (a) => a.kind === "flow_entry" || a.kind === "flow_exit"
+  );
+  const tagActivities = (data?.activities ?? []).filter((a) => a.kind === "tag_change");
+
+  const filtered: TimelineItem[] =
     activeTab === "events"
       ? allItems.filter((i) => i.kind === "event")
       : activeTab === "messages"
         ? allItems.filter((i) => i.kind === "message")
-        : allItems;
+        : activeTab === "flows"
+          ? flowActivities.map((a) => ({ kind: "activity" as const, item: a, occurred_at: a.occurred_at }))
+          : activeTab === "tags"
+            ? tagActivities.map((a) => ({ kind: "activity" as const, item: a, occurred_at: a.occurred_at }))
+            : allItems;
+
+  const tabs: { key: ActiveTab; label: string }[] = [
+    { key: "all",      label: "Tudo" },
+    { key: "events",   label: `Eventos${data ? ` (${data.events.length})` : ""}` },
+    { key: "messages", label: `Mensagens${data ? ` (${data.messages.length})` : ""}` },
+    { key: "flows",    label: `Jornadas${data ? ` (${flowActivities.length})` : ""}` },
+    { key: "tags",     label: `Tags${data ? ` (${tagActivities.length})` : ""}` },
+  ];
 
   return (
     <div className="card-vault p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display font-semibold text-sm">Histórico de Atividade</h3>
-        <div className="flex items-center gap-1 bg-white/[0.03] border border-border rounded-lg p-1">
-          {[
-            { key: "all" as const, label: "Tudo" },
-            { key: "events" as const, label: `Eventos${data ? ` (${data.events.length})` : ""}` },
-            { key: "messages" as const, label: `Mensagens${data ? ` (${data.messages.length})` : ""}` },
-          ].map((tab) => (
+        <div className="flex items-center gap-1 bg-white/[0.03] border border-border rounded-lg p-1 flex-wrap">
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -474,46 +618,61 @@ function TimelineSection({ profileId }: { profileId: number }) {
         </div>
       )}
 
-      {!isLoading && filtered.length === 0 && (
+      {!isLoading && isError && (
+        <div className="py-8 text-center">
+          <AlertTriangle className="w-7 h-7 text-destructive/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Não foi possível carregar o histórico</p>
+        </div>
+      )}
+
+      {!isLoading && !isError && filtered.length === 0 && (
         <div className="py-8 text-center">
           <Clock className="w-7 h-7 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">Nenhum histórico encontrado</p>
         </div>
       )}
 
-      {!isLoading && filtered.length > 0 && (
+      {!isLoading && !isError && filtered.length > 0 && (
         <div className="relative pl-4">
-          {/* Timeline line */}
           <div className="absolute left-[7px] top-3 bottom-3 w-px bg-border/60" />
 
           <div className="space-y-0">
-            {filtered.map((item, idx) => {
+            {filtered.map((item) => {
+              if (item.kind === "activity") {
+                return (
+                  <ActivityItem key={`act-${item.item.id}`} item={item.item} />
+                );
+              }
+
               if (item.kind === "event") {
                 const colors = EVENT_COLORS[item.type] ?? { badge: "badge-muted", dot: "bg-muted-foreground/30" };
+                const label = EVENT_LABELS[item.type] ?? item.type;
+                const amount = eventAmount(item.type, item.payload);
+                const meta = eventMeta(item.type, item.payload);
                 const isExpanded = expandedPayloads.has(item.id);
                 const hasPayload = Object.keys(item.payload ?? {}).length > 0;
-
                 return (
                   <div key={`evt-${item.id}`} className="relative pb-4">
-                    {/* Dot */}
                     <div className={`absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background ${colors.dot}`} />
                     <div className="pl-3">
                       <div className="flex items-start gap-2 flex-wrap">
                         <Zap className="w-3 h-3 text-muted-foreground/50 mt-0.5 shrink-0" />
-                        <span className={colors.badge}>{item.type}</span>
+                        <span className={colors.badge}>{label}</span>
+                        {amount && (
+                          <span className="text-xs font-data text-muted-foreground">{amount}</span>
+                        )}
+                        {meta && (
+                          <span className="text-xs text-muted-foreground/60">{meta}</span>
+                        )}
                         <span className="text-xs text-muted-foreground/60 mt-0.5">
-                          {item.occurred_at
-                            ? formatDistanceToNow(new Date(item.occurred_at), { locale: ptBR, addSuffix: true })
-                            : "—"}
+                          {formatDistanceToNow(new Date(item.occurred_at), { locale: ptBR, addSuffix: true })}
                         </span>
                         {hasPayload && (
                           <button
                             onClick={() => togglePayload(item.id)}
                             className="ml-auto text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                           >
-                            {isExpanded
-                              ? <ChevronUp className="w-3 h-3" />
-                              : <ChevronDown className="w-3 h-3" />}
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                           </button>
                         )}
                       </div>
@@ -525,33 +684,32 @@ function TimelineSection({ profileId }: { profileId: number }) {
                     </div>
                   </div>
                 );
-              } else {
-                // message
-                const statusCfg = MSG_STATUS_CONFIG[item.status] ?? MSG_STATUS_CONFIG.sent;
-                const StatusIcon = statusCfg.icon;
-                const ChanIcon = CHANNEL_ICONS_MSG[item.channel] ?? MessageSquare;
-
-                return (
-                  <div key={`msg-${item.id}`} className="relative pb-4">
-                    <div className="absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background bg-white/20" />
-                    <div className="pl-3 flex items-start gap-2 flex-wrap">
-                      <ChanIcon className="w-3 h-3 text-muted-foreground/50 mt-0.5 shrink-0" />
-                      <span className="badge-muted">
-                        <StatusIcon className={`w-3 h-3 ${statusCfg.color}`} />
-                        {statusCfg.label}
-                      </span>
-                      {item.template && (
-                        <span className="text-xs font-data text-muted-foreground">{item.template}</span>
-                      )}
-                      <span className="text-xs text-muted-foreground/60">
-                        {item.sent_at
-                          ? formatDistanceToNow(new Date(item.sent_at), { locale: ptBR, addSuffix: true })
-                          : "—"}
-                      </span>
-                    </div>
-                  </div>
-                );
               }
+
+              // message
+              const statusCfg = MSG_STATUS_CONFIG[item.status] ?? MSG_STATUS_CONFIG.sent;
+              const StatusIcon = statusCfg.icon;
+              const ChanIcon = CHANNEL_ICONS_MSG[item.channel] ?? MessageSquare;
+              return (
+                <div key={`msg-${item.id}`} className="relative pb-4">
+                  <div className="absolute -left-4 top-2 w-2.5 h-2.5 rounded-full border-2 border-background bg-white/20" />
+                  <div className="pl-3 flex items-start gap-2 flex-wrap">
+                    <ChanIcon className="w-3 h-3 text-muted-foreground/50 mt-0.5 shrink-0" />
+                    <span className="badge-muted">
+                      <StatusIcon className={`w-3 h-3 ${statusCfg.color}`} />
+                      {statusCfg.label}
+                    </span>
+                    {item.template && (
+                      <span className="text-xs font-data text-muted-foreground">{item.template}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground/60">
+                      {item.sent_at || item.created_at
+                        ? formatDistanceToNow(new Date(item.sent_at ?? item.created_at ?? ""), { locale: ptBR, addSuffix: true })
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              );
             })}
           </div>
         </div>

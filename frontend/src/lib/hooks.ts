@@ -553,13 +553,32 @@ export interface TimelineMessage {
   template: string | null;
   status: string;
   sent_at: string | null;
+  created_at?: string | null;
   opened_at: string | null;
   clicked_at: string | null;
+}
+
+export interface TimelineActivity {
+  id: number;
+  kind: "tag_change" | "flow_entry" | "flow_exit";
+  occurred_at: string;
+  data: {
+    // tag_change
+    added?: string[];
+    removed?: string[];
+    // flow_entry / flow_exit
+    flow_code?: string;
+    flow_name?: string;
+    trigger?: string;
+    state?: string;
+    duration_hours?: number;
+  };
 }
 
 export interface ProfileTimeline {
   events: TimelineEvent[];
   messages: TimelineMessage[];
+  activities: TimelineActivity[];
 }
 
 export function useProfileTimeline(id: number) {
@@ -719,6 +738,8 @@ export interface SendMessagePayload {
   channel: "email" | "sms" | "push" | "whatsapp";
   template_code: string;
   context?: Record<string, unknown>;
+  from_email?: string;
+  from_name?: string;
   bypass_quiet_hours?: boolean;
   bypass_frequency_cap?: boolean;
 }
@@ -957,5 +978,82 @@ export function useSaveWebhookConfig() {
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  });
+}
+
+// ── Campaign Coupons ──────────────────────────────────────────────────────────
+
+export interface CampaignCoupon {
+  id: number;
+  key: string;
+  code: string;
+  description: string;
+  flow_code: string;
+  is_active: boolean;
+  is_valid: boolean;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CouponPayload {
+  key: string;
+  code: string;
+  description?: string;
+  flow_code?: string;
+  is_active?: boolean;
+  expires_at?: string | null;
+}
+
+export function useCoupons() {
+  return useQuery<CampaignCoupon[]>({
+    queryKey: ["coupons"],
+    queryFn: async () => {
+      const { data } = await api.get("/templates/coupons/");
+      return data.results ?? data;
+    },
+  });
+}
+
+export function useCreateCoupon() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CouponPayload) => {
+      const { data } = await api.post("/templates/coupons/", payload);
+      return data as CampaignCoupon;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export function useUpdateCoupon() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...payload }: CouponPayload & { id: number }) => {
+      const { data } = await api.patch(`/templates/coupons/${id}/`, payload);
+      return data as CampaignCoupon;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export function useDeleteCoupon() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/templates/coupons/${id}/`);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coupons"] }),
+  });
+}
+
+export function useToggleCoupon() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, is_active }: { id: number; is_active: boolean }) => {
+      const { data } = await api.patch(`/templates/coupons/${id}/`, { is_active });
+      return data as CampaignCoupon;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coupons"] }),
   });
 }

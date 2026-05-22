@@ -16,6 +16,7 @@ import {
   Zap,
   LogOut,
   Radio,
+  Ticket,
 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -23,12 +24,13 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profiles", label: "Perfis", icon: Users },
   { href: "/segments", label: "Segmentos", icon: Filter },
+  { href: "/coupons", label: "Cupons", icon: Ticket },
   { href: "/flows", label: "Fluxos", icon: Workflow },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/messages", label: "Mensagens", icon: MessageSquare },
   { href: "/analytics", label: "Análises", icon: BarChart3 },
   { href: "/events", label: "Eventos", icon: Zap },
-  { href: "/settings", label: "Config.", icon: Settings },
+  { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
 function isActive(href: string, pathname: string) {
