@@ -162,13 +162,19 @@ class FlowEngine:
         from apps.messaging.tasks import send_message_task
 
         config = node.get("config", {})
+        # extra_context do nó (ex: bonus_code) tem prioridade sobre contexto de execução
+        node_extra = config.get("extra_context", {})
+        merged_context = {**(execution.context or {}), **node_extra}
+
         send_message_task.delay(
             profile_id=execution.profile_id,
             channel=config["channel"],
             template_code=config["template_code"],
-            context=execution.context,
+            context=merged_context,
             flow_execution_id=execution.id,
             campaign_id=execution.flow.code,
+            from_email=config.get("from_email", ""),
+            from_name=config.get("from_name", ""),
             bypass_quiet_hours=config.get("bypass_quiet_hours", False),
             bypass_frequency_cap=config.get("bypass_frequency_cap", False),
         )
@@ -211,8 +217,21 @@ class FlowEngine:
                 return actual <= expected
             elif operator == "contains":
                 return expected in (actual or [])
+            elif operator == "not_contains":
+                return expected not in (actual or [])
             elif operator == "isnull":
                 return (actual is None) == bool(expected)
+            elif operator == "within_days":
+                # actual deve ser um datetime; retorna True se estiver nos últimos N dias
+                if actual is None:
+                    return False
+                cutoff = timezone.now() - timedelta(days=int(expected))
+                return actual >= cutoff
+            elif operator == "older_than_days":
+                if actual is None:
+                    return True  # sem data = mais antigo que qualquer janela
+                cutoff = timezone.now() - timedelta(days=int(expected))
+                return actual < cutoff
             return False
         except (TypeError, ValueError):
             return False
@@ -371,8 +390,9 @@ class FlowEngine:
 
     @classmethod
     def _end_execution(cls, execution: FlowExecution, state: str, error: str = ""):
+        now = timezone.now()
         execution.state = state
-        execution.completed_at = timezone.now()
+        execution.completed_at = now
         execution.error_message = error
         execution.save(update_fields=["state", "completed_at", "error_message"])
 
@@ -380,3 +400,21 @@ class FlowEngine:
         if state == "completed":
             execution.flow.total_completed = (execution.flow.total_completed or 0) + 1
             execution.flow.save(update_fields=["total_completed"])
+
+        # Log de saída de fluxo
+        try:
+            from apps.profiles.models import ProfileActivity
+            duration_hours = round((now - execution.started_at).total_seconds() / 3600, 1)
+            ProfileActivity.objects.create(
+                profile_id=execution.profile_id,
+                kind=ProfileActivity.KIND_FLOW_EXIT,
+                occurred_at=now,
+                data={
+                    "flow_code": execution.flow.code,
+                    "flow_name": execution.flow.name,
+                    "state": state,
+                    "duration_hours": duration_hours,
+                },
+            )
+        except Exception:
+            logger.exception("Failed to log flow_exit activity for execution %s", execution.id)

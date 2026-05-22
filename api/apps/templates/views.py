@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
-from .models import AbTest, AbTestVariant, EmailAsset, MessageTemplate
+from .models import AbTest, AbTestVariant, CampaignCoupon, EmailAsset, MessageTemplate
 
 
 # ── Asset serializer / viewset ─────────────────────────────────────────────────
@@ -156,3 +156,31 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
 class AbTestViewSet(viewsets.ModelViewSet):
     queryset = AbTest.objects.all()
     serializer_class = AbTestSerializer
+
+
+# ── Campaign Coupon ────────────────────────────────────────────────────────────
+
+class CampaignCouponSerializer(serializers.ModelSerializer):
+    is_valid = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CampaignCoupon
+        fields = "__all__"
+
+
+class CampaignCouponViewSet(viewsets.ModelViewSet):
+    queryset = CampaignCoupon.objects.all().order_by("key")
+    serializer_class = CampaignCouponSerializer
+    filterset_fields = ["is_active", "flow_code"]
+    search_fields = ["key", "code", "description", "flow_code"]
+
+    def perform_update(self, serializer):
+        from django.core.cache import cache
+        instance = serializer.save()
+        # Invalida cache Redis ao salvar
+        cache.delete(f"campaign_coupon:{instance.key}")
+
+    def perform_destroy(self, instance):
+        from django.core.cache import cache
+        cache.delete(f"campaign_coupon:{instance.key}")
+        instance.delete()

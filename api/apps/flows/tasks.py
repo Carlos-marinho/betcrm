@@ -415,4 +415,21 @@ def _try_enroll(
 
     flow.total_enrolled = (flow.total_enrolled or 0) + 1
     flow.save(update_fields=["total_enrolled"])
+
+    # Log de entrada no fluxo
+    try:
+        from apps.profiles.models import ProfileActivity
+        ProfileActivity.objects.create(
+            profile_id=profile_id,
+            kind=ProfileActivity.KIND_FLOW_ENTRY,
+            occurred_at=timezone.now(),
+            data={
+                "flow_code": flow.code,
+                "flow_name": flow.name,
+                "trigger": flow.trigger_type,
+            },
+        )
+    except Exception:
+        logger.exception("Failed to log flow_entry activity for flow %s profile %s", flow.code, profile_id)
+
     return True

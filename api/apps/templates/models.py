@@ -156,6 +156,54 @@ class AbTest(TimeStampedModel):
         return self.name
 
 
+class CampaignCoupon(TimeStampedModel):
+    """Cupom de bônus vinculado a um flow/campanha — gerenciado via painel."""
+
+    key = models.SlugField(
+        max_length=80,
+        unique=True,
+        db_index=True,
+        help_text="Chave interna usada nos flows (ex: 'welcome', 'winback_gamer')",
+    )
+    code = models.CharField(
+        max_length=100,
+        help_text="Código real que o jogador insere ao depositar (ex: BOAS100)",
+    )
+    description = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Descrição interna da campanha",
+    )
+    flow_code = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Código do flow ao qual este cupom pertence (referência, não FK)",
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Cupom desativado automaticamente após esta data/hora",
+    )
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return f"{self.key} → {self.code}"
+
+    @property
+    def is_valid(self) -> bool:
+        """True se ativo e não expirado."""
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        if self.expires_at and self.expires_at < timezone.now():
+            return False
+        return True
+
+
 class AbTestVariant(models.Model):
     """Variante dentro de um A/B test."""
 

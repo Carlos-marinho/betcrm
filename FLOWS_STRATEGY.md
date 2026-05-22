@@ -72,14 +72,17 @@ Cadastro ──▶ NRC (sem depósito) ──▶ saída
 **Trigger:** `user.register`
 **Goal:** `payment.deposit.completed`
 **Tipo:** Evento · `allow_reentry: false`
+**Cupom:** `BONUS_CODE_WELCOME`
 
 | Etapa | Delay | Template | Canal |
 |-------|-------|----------|-------|
 | D+1 | 24h | `welcome_guide_v1` | Email |
 | Check | — | Se depositou → sai | — |
-| D+3 | +48h | `welcome_urgency_v1` | Email |
+| D+3 | +48h | `welcome_urgency_v1` ✉️🎟️ | Email |
 | Check | — | Se depositou → sai | — |
-| D+7 | +96h | `welcome_lastchance_v1` | Email |
+| D+5 | +48h | `welcome_sms_v1` 📱🎟️ | **SMS** |
+| Check | — | Se depositou → sai | — |
+| D+7 | +48h | `welcome_lastchance_v1` ✉️🎟️ | Email |
 
 **Estratégia:**
 - D+1: Tom educativo. Explica como funciona a plataforma, os métodos de depósito (PIX), e destaca a facilidade. Sem urgência forçada — o objetivo é remover fricção.
@@ -119,13 +122,16 @@ Cadastro ──▶ NRC (sem depósito) ──▶ saída
 **Trigger:** `payment.deposit.started`
 **Goal:** `payment.deposit.completed`
 **Tipo:** Evento · `allow_reentry: true` · cooldown 1 dia
+**Cupom:** `BONUS_CODE_DEPOSIT_ABANDONED`
 
 | Etapa | Delay | Template | Canal |
 |-------|-------|----------|-------|
+| Check | 30min | Se completou → sai | — |
+| **SMS imediato** | — | `deposit_abandoned_sms_v1` 📱🎟️ | **SMS** |
 | Check | 2h | Se completou → sai | — |
-| Recovery | — | `deposit_abandoned_d2_v1` | Email |
+| Recovery | — | `deposit_abandoned_d2_v1` ✉️🎟️ | Email |
 | Check | 24h | Se completou → sai | — |
-| D+1 | — | `deposit_abandoned_d2_v1` | Email |
+| D+1 | — | `deposit_abandoned_d2_v1` ✉️🎟️ | Email |
 
 **Estratégia:**
 - 2h de delay antes do primeiro email: dá tempo para o usuário completar o depósito por conta própria (problemas de banco se resolvem em minutos, não horas).
@@ -376,6 +382,25 @@ Cadastro ──▶ NRC (sem depósito) ──▶ saída
 - `send_rate_per_minute: 120` para escalonamento gradual e reputação de IP.
 - Cooldown de 6 dias garante que cada jogador só recebe uma vez por semana mesmo em caso de re-trigger.
 - Copy muda suavemente a cada semana via banner — o HTML base é fixo, o contexto visual muda.
+
+---
+
+## Cupons de bônus — como configurar
+
+Os cupons são gerenciados via variáveis de ambiente. **Não há código hardcoded no banco.**
+
+1. Edite `.env` com os valores reais:
+   ```
+   BONUS_CODE_WELCOME=SEU_CUPOM_REAL
+   BONUS_CODE_WINBACK_GAMER=OUTRO_CUPOM
+   # ... etc.
+   ```
+2. Reinicie a API: `make up` ou `docker compose restart api`
+3. Todos os flows passam o `bonus_code_key` via `extra_context`, que é resolvido em `settings.BONUS_CODES` no momento do render — sem nenhuma migração adicional.
+
+Para **promoções semanais** com códigos que mudam toda semana:
+- Atualize `BONUS_CODE_PROMO_SLOTS`, `BONUS_CODE_PROMO_CRASH`, `BONUS_CODE_PROMO_LIVE` no `.env` antes de cada sexta-feira e reinicie a API.
+- O bloco de cupom aparece no email automaticamente quando `bonus_code` não está vazio.
 
 ---
 

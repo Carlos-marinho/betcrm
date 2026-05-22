@@ -163,9 +163,40 @@ class TemplateService:
         return template
 
     @classmethod
+    def _resolve_bonus_code(cls, extra: dict | None) -> str:
+        """Resolve bonus_code: valor direto > DB (com cache Redis 60s) > vazio."""
+        if not extra:
+            return ""
+        if "bonus_code" in extra:
+            return extra["bonus_code"]
+        key = extra.get("bonus_code_key", "")
+        if not key:
+            return ""
+
+        from django.core.cache import cache
+        from .models import CampaignCoupon
+
+        cache_key = f"campaign_coupon:{key}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            coupon = CampaignCoupon.objects.get(key=key)
+            code = coupon.code if coupon.is_valid else ""
+        except CampaignCoupon.DoesNotExist:
+            code = ""
+
+        cache.set(cache_key, code, timeout=60)
+        return code
+
+    @classmethod
     def _build_context(cls, profile, extra: dict | None) -> dict:
         """Monta o contexto de variáveis disponíveis para o template."""
+        _extra = extra or {}
         return {
+            # Cupom de bônus — resolvido de settings via bonus_code_key ou passado direto
+            "bonus_code": cls._resolve_bonus_code(_extra),
             # Profile básico
             "first_name": profile.first_name or "jogador",
             "last_name": profile.last_name or "",
@@ -196,8 +227,8 @@ class TemplateService:
             "deposit_url": getattr(settings, "DEPOSIT_URL", "https://yourdomain.com/depositar"),
             "support_url": getattr(settings, "SUPPORT_URL", "https://yourdomain.com/suporte"),
             "unsubscribe_url": cls._build_unsubscribe_url(profile),
-            # Extra (do fluxo / evento)
-            **(extra or {}),
+            # Extra (do fluxo / evento) — pode sobrescrever qualquer variável acima
+            **_extra,
         }
 
     @classmethod
