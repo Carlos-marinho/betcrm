@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,7 +15,12 @@ import {
   type ProfileListItem,
 } from "@/lib/hooks";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -23,7 +28,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RulesBuilder, type SegmentRules } from "@/components/features/rules-builder";
 import {
-  Filter, Plus, Pencil, Trash2, Users, ExternalLink, TrendingUp,
+  Filter,
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  ExternalLink,
+  TrendingUp,
+  Search,
+  X,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -67,7 +80,11 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
   const isEditing = !!segment;
 
   const [rules, setRules] = useState<SegmentRules>(() => {
-    if (segment?.rules && typeof segment.rules === "object" && "conditions" in (segment.rules as object)) {
+    if (
+      segment?.rules &&
+      typeof segment.rules === "object" &&
+      "conditions" in (segment.rules as object)
+    ) {
       return segment.rules as SegmentRules;
     }
     return EMPTY_RULES;
@@ -100,11 +117,18 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
     if (!open) return;
     reset(
       segment
-        ? { name: segment.name, code: segment.code, description: segment.description, is_active: segment.is_active }
+        ? {
+            name: segment.name,
+            code: segment.code,
+            description: segment.description,
+            is_active: segment.is_active,
+          }
         : { name: "", code: "", description: "", is_active: true }
     );
     setRules(
-      segment?.rules && typeof segment.rules === "object" && "conditions" in (segment.rules as object)
+      segment?.rules &&
+        typeof segment.rules === "object" &&
+        "conditions" in (segment.rules as object)
         ? (segment.rules as SegmentRules)
         : EMPTY_RULES
     );
@@ -177,7 +201,11 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
 
           {/* ── Info tab ── */}
           <TabsContent value="info">
-            <form id="seg-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            <form
+              id="seg-form"
+              onSubmit={handleSubmit(onSubmit)}
+              className="space-y-4 pt-2"
+            >
               <div className="space-y-1.5">
                 <Label htmlFor="seg-name">Nome</Label>
                 <Input
@@ -186,7 +214,9 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
                   {...register("name")}
                   onChange={handleNameChange}
                 />
-                {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+                {errors.name && (
+                  <p className="text-xs text-destructive">{errors.name.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -197,7 +227,9 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
                   className="font-data text-sm"
                   {...register("code")}
                 />
-                {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
+                {errors.code && (
+                  <p className="text-xs text-destructive">{errors.code.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -216,13 +248,17 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
               <div className="flex items-center justify-between py-3 px-4 rounded-lg border border-border bg-white/[0.02]">
                 <div>
                   <p className="text-sm font-medium text-foreground">Ativo</p>
-                  <p className="text-xs text-muted-foreground">Segmento disponível para uso em fluxos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Segmento disponível para uso em fluxos
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setValue("is_active", !isActiveVal)}
                   className={`relative w-10 h-5 rounded-full border transition-all ${
-                    isActiveVal ? "bg-teal/20 border-teal/40" : "bg-white/5 border-border"
+                    isActiveVal
+                      ? "bg-teal/20 border-teal/40"
+                      : "bg-white/5 border-border"
                   }`}
                 >
                   <span
@@ -238,8 +274,10 @@ function SegmentModal({ open, onClose, segment }: SegmentModalProps) {
           {/* ── Rules tab ── */}
           <TabsContent value="rules" className="pt-2">
             <div className="mb-3 px-3 py-2.5 rounded-lg border border-gold/15 bg-gold/[0.03] text-xs text-muted-foreground">
-              Defina as condições que determinam quais usuários entram neste segmento.
-              Clique em <span className="text-foreground font-medium">"Estimar audiência"</span> para ver quantos usuários se enquadram.
+              Defina as condições que determinam quais usuários entram neste
+              segmento. Clique em{" "}
+              <span className="text-foreground font-medium">&quot;Estimar audiência&quot;</span>{" "}
+              para ver quantos usuários se enquadram.
             </div>
             <RulesBuilder
               value={rules}
@@ -322,7 +360,9 @@ function MembersModal({ open, onClose, segment }: MembersModalProps) {
           {!isLoading && data?.results.length === 0 && (
             <div className="py-12 text-center">
               <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Nenhum usuário neste segmento</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhum usuário neste segmento
+              </p>
             </div>
           )}
 
@@ -335,20 +375,29 @@ function MembersModal({ open, onClose, segment }: MembersModalProps) {
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gold/20 to-teal/10 border border-gold/15 flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-bold text-gold">
-                      {(profile.first_name?.[0] ?? profile.email?.[0] ?? "?").toUpperCase()}
+                      {(
+                        profile.first_name?.[0] ??
+                        profile.email?.[0] ??
+                        "?"
+                      ).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground font-medium truncate">
                       {profile.first_name || profile.email || profile.external_id}
                     </p>
-                    <p className="text-xs font-data text-muted-foreground">{profile.external_id}</p>
+                    <p className="text-xs font-data text-muted-foreground">
+                      {profile.external_id}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {profile.ftd_at && <span className="badge-teal">FTD</span>}
                     {profile.ltv && (
                       <span className="text-xs font-data text-muted-foreground">
-                        R$ {parseFloat(profile.ltv).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                        R${" "}
+                        {parseFloat(profile.ltv).toLocaleString("pt-BR", {
+                          maximumFractionDigits: 0,
+                        })}
                       </span>
                     )}
                     <Link
@@ -385,12 +434,28 @@ function MembersModal({ open, onClose, segment }: MembersModalProps) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+type ActiveFilter = "" | "true" | "false";
+
 export default function SegmentsPage() {
-  const { data, isLoading } = useSegments();
-  const deleteMutation = useDeleteSegment();
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Segment | null>(null);
   const [membersTarget, setMembersTarget] = useState<Segment | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data, isLoading } = useSegments({
+    search: debouncedSearch,
+    is_active: activeFilter,
+  });
+  const deleteMutation = useDeleteSegment();
+
+  function handleSearch(val: string) {
+    setSearch(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedSearch(val), 380);
+  }
 
   function handleEdit(seg: Segment) {
     setEditTarget(seg);
@@ -403,7 +468,8 @@ export default function SegmentsPage() {
   }
 
   async function handleDelete(seg: Segment) {
-    if (!confirm(`Deletar segmento "${seg.name}"? Esta ação não pode ser desfeita.`)) return;
+    if (!confirm(`Deletar segmento "${seg.name}"? Esta ação não pode ser desfeita.`))
+      return;
     try {
       await deleteMutation.mutateAsync(seg.id);
       toast.success("Segmento removido");
@@ -417,15 +483,22 @@ export default function SegmentsPage() {
     return (seg.rules as SegmentRules).conditions?.length ?? 0;
   };
 
+  const activeFilterCount = [debouncedSearch !== "", activeFilter !== ""].filter(Boolean).length;
+  const hasFilters = activeFilterCount > 0;
+
   return (
     <>
-    <div className="space-y-6">
+      <div className="space-y-5">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Segmentos</h1>
             <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
-              {isLoading ? <Skeleton className="h-3.5 w-24" /> : `${data?.count ?? 0} segmentos`}
+              {isLoading ? (
+                <Skeleton className="h-3.5 w-24" />
+              ) : (
+                `${data?.count ?? 0} segmento${data?.count !== 1 ? "s" : ""}`
+              )}
             </span>
           </div>
           <button
@@ -435,6 +508,57 @@ export default function SegmentsPage() {
             <Plus className="w-4 h-4" />
             Novo Segmento
           </button>
+        </div>
+
+        {/* Search + status filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Buscar por nome ou código..."
+              className="w-full bg-input border border-border rounded-md pl-9 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-gold/40 focus:border-gold/40 transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => handleSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status filter pills */}
+          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+            {[
+              { label: "Todos", value: "" as ActiveFilter },
+              { label: "Ativos", value: "true" as ActiveFilter },
+              { label: "Inativos", value: "false" as ActiveFilter },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setActiveFilter(opt.value)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                  activeFilter === opt.value
+                    ? "bg-gold/10 text-gold border border-gold/20"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20 text-xs font-medium text-gold">
+              <span className="w-4 h-4 rounded-full bg-gold text-[10px] font-bold text-background flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+              filtro{activeFilterCount !== 1 ? "s" : ""} ativo{activeFilterCount !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         {/* Loading skeletons */}
@@ -463,105 +587,122 @@ export default function SegmentsPage() {
         {!isLoading && data?.results.length === 0 && (
           <div className="card-vault p-12 text-center">
             <Filter className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium text-foreground mb-1">Nenhum segmento ainda</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Crie segmentos de audiência para usar em fluxos e campanhas.
+            <p className="text-sm font-medium text-foreground mb-1">
+              {hasFilters ? "Nenhum segmento encontrado" : "Nenhum segmento ainda"}
             </p>
-            <button
-              onClick={handleNew}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Criar segmento
-            </button>
+            <p className="text-sm text-muted-foreground mb-4">
+              {hasFilters
+                ? "Tente outros termos de busca ou remova os filtros."
+                : "Crie segmentos de audiência para usar em fluxos e campanhas."}
+            </p>
+            {!hasFilters && (
+              <button
+                onClick={handleNew}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Criar segmento
+              </button>
+            )}
           </div>
         )}
 
         {/* Segments grid */}
         {!isLoading && data && data.results.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 animate-fade-up">
-          {data.results.map((seg) => (
-            <div key={seg.id} className="card-vault p-5 hover:border-gold/20 transition-all group">
-              <div className="flex items-start gap-3">
-                {/* Icon */}
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    seg.is_active ? "bg-gold/10 text-gold" : "bg-white/5 text-muted-foreground"
-                  }`}
-                >
-                  <Filter className="w-4 h-4" />
-                </div>
+          <div className="grid gap-3 sm:grid-cols-2 animate-fade-up">
+            {data.results.map((seg) => (
+              <div
+                key={seg.id}
+                className="card-vault p-5 hover:border-gold/20 transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  {/* Icon */}
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      seg.is_active
+                        ? "bg-gold/10 text-gold"
+                        : "bg-white/5 text-muted-foreground"
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                  </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className="font-medium text-sm text-foreground">{seg.name}</span>
-                    {seg.is_active ? (
-                      <span className="badge-teal">ativo</span>
-                    ) : (
-                      <span className="badge-muted">inativo</span>
-                    )}
-                    {rulesCount(seg) > 0 && (
-                      <span className="badge-gold">
-                        {rulesCount(seg)} regra{rulesCount(seg) !== 1 ? "s" : ""}
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="font-medium text-sm text-foreground">
+                        {seg.name}
                       </span>
-                    )}
-                  </div>
-                  <p className="text-xs font-data text-muted-foreground mb-1">{seg.code}</p>
-                  {seg.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-2">{seg.description}</p>
-                  )}
-
-                  <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground/60">
-                    {seg.member_count > 0 && (
-                      <button
-                        onClick={() => setMembersTarget(seg)}
-                        className="flex items-center gap-1 hover:text-teal transition-colors"
-                      >
-                        <Users className="w-3 h-3" />
-                        <span className="font-data">
-                          {seg.member_count.toLocaleString("pt-BR")}
+                      {seg.is_active ? (
+                        <span className="badge-teal">ativo</span>
+                      ) : (
+                        <span className="badge-muted">inativo</span>
+                      )}
+                      {rulesCount(seg) > 0 && (
+                        <span className="badge-gold">
+                          {rulesCount(seg)} regra{rulesCount(seg) !== 1 ? "s" : ""}
                         </span>
-                      </button>
+                      )}
+                    </div>
+                    <p className="text-xs font-data text-muted-foreground mb-1">
+                      {seg.code}
+                    </p>
+                    {seg.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {seg.description}
+                      </p>
                     )}
-                    <span className="flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3" />
-                      {formatDistanceToNow(new Date(seg.updated_at), {
-                        locale: ptBR,
-                        addSuffix: true,
-                      })}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button
-                    onClick={() => setMembersTarget(seg)}
-                    className="p-1.5 rounded text-muted-foreground hover:text-teal hover:bg-teal/10 transition-colors"
-                    title="Ver membros"
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleEdit(seg)}
-                    className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
-                    title="Editar"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(seg)}
-                    className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    title="Remover"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <div className="flex items-center gap-3 mt-2.5 text-xs text-muted-foreground/60">
+                      {seg.member_count > 0 && (
+                        <button
+                          onClick={() => setMembersTarget(seg)}
+                          className="flex items-center gap-1 hover:text-teal transition-colors"
+                        >
+                          <Users className="w-3 h-3" />
+                          <span className="font-data">
+                            {seg.member_count.toLocaleString("pt-BR")}
+                          </span>
+                        </button>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" />
+                        {formatDistanceToNow(new Date(seg.updated_at), {
+                          locale: ptBR,
+                          addSuffix: true,
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={() => setMembersTarget(seg)}
+                      className="p-1.5 rounded text-muted-foreground hover:text-teal hover:bg-teal/10 transition-colors"
+                      title="Ver membros"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(seg)}
+                      className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(seg)}
+                      className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Remover"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
       </div>
 

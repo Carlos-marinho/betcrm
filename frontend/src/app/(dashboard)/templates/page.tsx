@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,12 +10,15 @@ import {
   useUpdateTemplate,
   useDeleteTemplate,
   useTemplatePreview,
+  useProfiles,
+  useSendMessage,
   useAbTests,
   useCreateAbTest,
   useDeleteAbTest,
   type MessageTemplate,
   type AbTest,
   type EmailAsset,
+  type ProfileListItem,
 } from "@/lib/hooks";
 import { AssetLibraryModal } from "@/components/features/templates/asset-library-modal";
 import {
@@ -28,7 +31,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FileText, Mail, MessageSquare, Bell, MessageCircle, Plus, Pencil, Trash2, Eye,
-  FlaskConical, Loader2, CheckCircle, AlertCircle, User, ImageIcon, X, Images,
+  FlaskConical, Loader2, CheckCircle, AlertCircle, User, ImageIcon, X, Images, RefreshCw,
+  ChevronDown, Send, Search,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -87,15 +91,72 @@ interface ApiPreviewModalProps {
 
 function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
   const previewMutation = useTemplatePreview();
-  const [profileId, setProfileId] = useState("");
+  const sendMutation = useSendMessage();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { data: profilesData, isLoading: profilesLoading } = useProfiles({ search: debouncedSearch });
+  const [selectedProfile, setSelectedProfile] = useState<ProfileListItem | null>(null);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
 
-  function handlePreview() {
-    if (!template) return;
+  const profiles = profilesData?.results ?? [];
+  const autoRenderedRef = useRef(false);
+
+  // Debounce de 350ms para a busca
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Reset da flag ao fechar a modal
+  useEffect(() => {
+    if (!open) autoRenderedRef.current = false;
+  }, [open]);
+
+  // Auto-render com o primeiro profile quando a modal abre — dispara apenas uma
+  // vez por abertura, mesmo que profilesLoading ou profiles mudem depois.
+  useEffect(() => {
+    if (!open || !template || profilesLoading || autoRenderedRef.current) return;
+    autoRenderedRef.current = true;
+    const first = profiles[0] ?? null;
+    setSelectedProfile(first);
     previewMutation.mutate({
       id: template.id,
-      profile_external_id: profileId || undefined,
+      profile_external_id: first?.external_id,
     });
+    setPreviewTab("html");
+    setProfilePickerOpen(false);
+    setSearchQuery("");
+  // profiles intencionalmente omitido: o auto-render usa o snapshot do momento
+  // em que loading termina; seleções subsequentes são via handleSelectProfile.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, template, profilesLoading, profiles]);
+
+  function handleSelectProfile(profile: ProfileListItem) {
+    if (!template) return;
+    setSelectedProfile(profile);
+    setProfilePickerOpen(false);
+    setSearchQuery("");
+    previewMutation.mutate({
+      id: template.id,
+      profile_external_id: profile.external_id,
+    });
+  }
+
+  async function handleSendTest() {
+    if (!template || !selectedProfile) return;
+    try {
+      await sendMutation.mutateAsync({
+        profile_id: selectedProfile.id,
+        channel: template.channel,
+        template_code: template.code,
+        bypass_quiet_hours: true,
+        bypass_frequency_cap: true,
+      });
+      toast.success(`Mensagem de teste enviada para ${selectedProfile.email || selectedProfile.external_id}`);
+    } catch {
+      toast.error("Erro ao enviar mensagem de teste");
+    }
   }
 
   const result = previewMutation.data;
@@ -104,54 +165,159 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Icon className="w-4 h-4 text-muted-foreground" />
-            <DialogTitle>Preview — {template?.name}</DialogTitle>
-            <span className={badge}>{template?.channel}</span>
-          </div>
-          <DialogDescription className="font-data">{template?.code}</DialogDescription>
-        </DialogHeader>
-
-        {/* Profile context input */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              value={profileId}
-              onChange={(e) => setProfileId(e.target.value)}
-              placeholder="ID do usuário para contexto (opcional)"
-              className="pl-8 text-sm font-data"
-            />
+      <DialogContent className="max-w-4xl h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogTitle className="sr-only">Preview — {template?.name}</DialogTitle>
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-border/60 shrink-0">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <Icon className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-base font-semibold text-foreground">Preview — {template?.name}</h2>
+              <span className={badge}>{template?.channel}</span>
+            </div>
+            <p className="text-xs font-data text-muted-foreground">{template?.code}</p>
           </div>
           <button
-            onClick={handlePreview}
-            disabled={previewMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 disabled:opacity-50 transition-colors shrink-0"
+            onClick={onClose}
+            className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-white/5 transition-colors"
           >
-            {previewMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-            Renderizar
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Results */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {!result && !previewMutation.isPending && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-3">
-                <Eye className="w-5 h-5 text-muted-foreground/50" />
+        {/* Profile selector bar */}
+        <div className="px-6 py-3 border-b border-border/40 shrink-0 bg-white/[0.01]">
+          <div className="flex items-center gap-2">
+            {/* Selected profile display / trigger */}
+            <div className="flex-1 relative">
+              <button
+                onClick={() => setProfilePickerOpen((v) => !v)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-white/[0.03] border border-border hover:border-gold/30 text-sm transition-colors text-left"
+              >
+                <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {profilesLoading ? (
+                  <span className="text-muted-foreground/50 text-xs flex-1">Carregando perfis...</span>
+                ) : selectedProfile ? (
+                  <span className="flex-1 truncate">
+                    <span className="font-medium text-foreground">{selectedProfile.first_name || "Sem nome"}</span>
+                    <span className="text-muted-foreground font-data ml-2 text-xs">{selectedProfile.external_id}</span>
+                    {selectedProfile.email && (
+                      <span className="text-muted-foreground/50 ml-2 text-xs">· {selectedProfile.email}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground/50 text-xs flex-1">Nenhum perfil selecionado</span>
+                )}
+                <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground/50 shrink-0 transition-transform ${profilePickerOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* Dropdown picker */}
+              {profilePickerOpen && (
+                <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-card border border-border rounded-lg shadow-2xl overflow-hidden">
+                  {/* Search inside picker */}
+                  <div className="p-2 border-b border-border/60">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
+                      <input
+                        autoFocus
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Buscar por nome, email ou ID..."
+                        className="w-full pl-8 pr-3 py-1.5 text-sm bg-white/5 border border-border rounded-md text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-gold/40 focus:bg-white/[0.07] transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {profilesLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+                      </div>
+                    ) : profiles.length === 0 ? (
+                      <div className="py-6 text-center text-sm text-muted-foreground">
+                        Nenhum perfil encontrado
+                      </div>
+                    ) : (
+                      profiles.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => handleSelectProfile(p)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5 transition-colors ${
+                            selectedProfile?.id === p.id ? "bg-gold/[0.06] border-l-2 border-gold pl-[10px]" : ""
+                          }`}
+                        >
+                          <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-xs font-medium text-muted-foreground">
+                            {(p.first_name?.[0] ?? "?").toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground font-medium truncate">{p.first_name || "Sem nome"}</p>
+                            <p className="text-xs font-data text-muted-foreground/70 truncate">{p.external_id}</p>
+                          </div>
+                          {p.email && (
+                            <span className="text-xs text-muted-foreground/40 truncate shrink-0 max-w-[130px]">{p.email}</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  {profilesData && profilesData.count > profiles.length && (
+                    <div className="px-3 py-2 border-t border-border/40 text-xs text-muted-foreground/50 text-center">
+                      Mostrando {profiles.length} de {profilesData.count} · refine a busca para ver mais
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Regerar */}
+            <button
+              onClick={() => selectedProfile && handleSelectProfile(selectedProfile)}
+              disabled={previewMutation.isPending || !selectedProfile}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-white/5 text-muted-foreground hover:text-foreground hover:bg-white/10 border border-border disabled:opacity-40 transition-colors shrink-0"
+              title="Regerar com o mesmo perfil"
+            >
+              {previewMutation.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              Regerar
+            </button>
+
+            {/* Enviar teste */}
+            <button
+              onClick={handleSendTest}
+              disabled={sendMutation.isPending || !selectedProfile || !template}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-teal/90 text-primary-foreground hover:bg-teal disabled:opacity-40 transition-colors shrink-0"
+              title="Enviar mensagem de teste para este perfil"
+            >
+              {sendMutation.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              Enviar teste
+            </button>
+          </div>
+        </div>
+
+        {/* Preview area */}
+        <div
+          className="flex-1 overflow-y-auto px-6 py-5 min-h-0"
+          onClick={() => profilePickerOpen && setProfilePickerOpen(false)}
+        >
+          {!result && previewMutation.isPending && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Loader2 className="w-10 h-10 text-muted-foreground/30 animate-spin mb-4" />
+              <p className="text-sm text-muted-foreground">Renderizando template...</p>
+            </div>
+          )}
+
+          {!result && !previewMutation.isPending && !previewMutation.isError && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                <Eye className="w-6 h-6 text-muted-foreground/30" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                Clique em <span className="text-foreground font-medium">Renderizar</span> para ver o template com variáveis substituídas
-              </p>
-              <p className="text-xs text-muted-foreground/50 mt-1">
-                Sem ID de usuário, usamos um perfil fictício com dados de exemplo
-              </p>
+              <p className="text-sm text-muted-foreground">Aguardando renderização...</p>
             </div>
           )}
 
@@ -160,39 +326,42 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
               <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-destructive">Erro ao renderizar template</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Verifique a sintaxe Jinja2 do template
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Verifique a sintaxe Jinja2 do template</p>
               </div>
             </div>
           )}
 
           {result && (
-            <div className="space-y-4">
-              {result.from && (
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5">De</p>
-                  <div className="px-3 py-2 bg-white/[0.03] border border-border rounded-md text-sm font-data text-muted-foreground">
-                    {result.from}
-                  </div>
+            <div className="space-y-5 h-full flex flex-col">
+              {/* Meta: De + Assunto */}
+              {(result.from || result.subject) && (
+                <div className="space-y-3">
+                  {result.from && (
+                    <div>
+                      <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1">De</p>
+                      <div className="px-3 py-2 bg-white/[0.03] border border-border/60 rounded-md text-sm font-data text-muted-foreground">
+                        {result.from}
+                      </div>
+                    </div>
+                  )}
+                  {result.subject && (
+                    <div>
+                      <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1">Assunto</p>
+                      <div className="px-3 py-2.5 bg-white/[0.03] border border-border/60 rounded-md text-sm text-foreground font-medium">
+                        {result.subject}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {result.subject && (
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5">Assunto</p>
-                  <div className="px-3 py-2.5 bg-white/[0.03] border border-border rounded-md text-sm text-foreground font-medium">
-                    {result.subject}
-                  </div>
-                </div>
-              )}
-
+              {/* Corpo */}
               {(result.html || result.text || result.body) && (
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5">Corpo</p>
-                  {result.html && result.text ? (
-                    <>
-                      <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1 w-fit mb-3">
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest">Corpo</p>
+                    {result.html && result.text && (
+                      <div className="flex items-center gap-1 bg-card border border-border rounded-md p-0.5">
                         {[
                           { key: "html" as const, label: "HTML" },
                           { key: "text" as const, label: "Texto" },
@@ -200,7 +369,7 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
                           <button
                             key={t.key}
                             onClick={() => setPreviewTab(t.key)}
-                            className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                            className={`px-2.5 py-0.5 rounded text-xs font-medium transition-all ${
                               previewTab === t.key
                                 ? "bg-gold/10 text-gold border border-gold/20"
                                 : "text-muted-foreground hover:text-foreground"
@@ -210,46 +379,36 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
                           </button>
                         ))}
                       </div>
-                      {previewTab === "html" ? (
-                        <div
-                          className="p-5 bg-white rounded-lg text-sm leading-relaxed text-gray-900 max-h-[300px] overflow-y-auto"
-                          dangerouslySetInnerHTML={{ __html: result.html }}
-                        />
-                      ) : (
-                        <pre className="px-4 py-3 bg-white/[0.03] border border-border rounded-md text-xs font-data text-foreground whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
-                          {result.text}
-                        </pre>
-                      )}
-                    </>
-                  ) : result.html ? (
+                    )}
+                  </div>
+
+                  {result.html && (previewTab === "html" || !result.text) ? (
                     <div
-                      className="p-5 bg-white rounded-lg text-sm leading-relaxed text-gray-900 max-h-[300px] overflow-y-auto"
+                      className="flex-1 bg-white rounded-xl overflow-auto shadow-inner"
+                      style={{ minHeight: "320px" }}
                       dangerouslySetInnerHTML={{ __html: result.html }}
                     />
                   ) : (
-                    <pre className="px-4 py-3 bg-white/[0.03] border border-border rounded-md text-xs font-data text-foreground whitespace-pre-wrap leading-relaxed">
+                    <pre className="flex-1 px-4 py-4 bg-white/[0.03] border border-border/60 rounded-xl text-xs font-data text-foreground whitespace-pre-wrap leading-relaxed overflow-auto" style={{ minHeight: "200px" }}>
                       {result.text ?? result.body}
                     </pre>
                   )}
                 </div>
               )}
 
-              <div className="flex items-center gap-1.5 text-xs text-teal">
+              <div className="flex items-center gap-1.5 text-xs text-teal shrink-0">
                 <CheckCircle className="w-3.5 h-3.5" />
                 Template renderizado com sucesso
+                {selectedProfile && (
+                  <span className="text-muted-foreground/50">
+                    · perfil{" "}
+                    <span className="font-data text-muted-foreground">{selectedProfile.first_name || selectedProfile.external_id}</span>
+                  </span>
+                )}
               </div>
             </div>
           )}
         </div>
-
-        <DialogFooter>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 border border-border transition-colors"
-          >
-            Fechar
-          </button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

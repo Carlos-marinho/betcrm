@@ -1,30 +1,38 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRecentEvents } from "@/lib/hooks";
-import { Zap, ChevronRight } from "lucide-react";
+import { Zap, ChevronRight, Search, X, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EventDetailDrawer } from "@/components/features/events/EventDetailDrawer";
 
 const EVENT_META: Record<string, { label: string; badge: string }> = {
-  "user.register":                { label: "Cadastro de Usuário",    badge: "badge-gold"  },
-  "user.login":                   { label: "Login de Usuário",        badge: "badge-muted" },
-  "user.logout":                  { label: "Logout de Usuário",       badge: "badge-muted" },
-  "payment.deposit.started":      { label: "Depósito Iniciado",       badge: "badge-gold"  },
-  "payment.deposit.completed":    { label: "Depósito Concluído",      badge: "badge-teal"  },
-  "payment.deposit.failed":       { label: "Depósito Falhou",         badge: "badge-red"   },
-  "payment.withdrawal.request":   { label: "Saque Solicitado",        badge: "badge-muted" },
-  "payment.withdrawal.approved":  { label: "Saque Aprovado",          badge: "badge-teal"  },
-  "payment.withdrawal.rejected":  { label: "Saque Rejeitado",         badge: "badge-red"   },
-  "payment.withdrawal.completed": { label: "Saque Concluído",         badge: "badge-teal"  },
-  "game.started":                 { label: "Jogo Iniciado",           badge: "badge-muted" },
-  "bonus.activated":              { label: "Bônus Ativado",           badge: "badge-teal"  },
-  "bonus.completed":              { label: "Bônus Concluído",         badge: "badge-teal"  },
-  "bonus.expired":                { label: "Bônus Expirado",          badge: "badge-red"   },
-  "cashback.paid":                { label: "Cashback Pago",           badge: "badge-teal"  },
+  "user.register": { label: "Cadastro de Usuário", badge: "badge-gold" },
+  "user.login": { label: "Login de Usuário", badge: "badge-muted" },
+  "user.logout": { label: "Logout de Usuário", badge: "badge-muted" },
+  "payment.deposit.started": { label: "Depósito Iniciado", badge: "badge-gold" },
+  "payment.deposit.completed": { label: "Depósito Concluído", badge: "badge-teal" },
+  "payment.deposit.failed": { label: "Depósito Falhou", badge: "badge-red" },
+  "payment.withdrawal.request": { label: "Saque Solicitado", badge: "badge-muted" },
+  "payment.withdrawal.approved": { label: "Saque Aprovado", badge: "badge-teal" },
+  "payment.withdrawal.rejected": { label: "Saque Rejeitado", badge: "badge-red" },
+  "payment.withdrawal.completed": { label: "Saque Concluído", badge: "badge-teal" },
+  "game.started": { label: "Jogo Iniciado", badge: "badge-muted" },
+  "bonus.activated": { label: "Bônus Ativado", badge: "badge-teal" },
+  "bonus.completed": { label: "Bônus Concluído", badge: "badge-teal" },
+  "bonus.expired": { label: "Bônus Expirado", badge: "badge-red" },
+  "cashback.paid": { label: "Cashback Pago", badge: "badge-teal" },
 };
+
+const EVENT_TYPE_OPTIONS = [
+  { label: "Todos os tipos", value: "" },
+  ...Object.entries(EVENT_META).map(([code, meta]) => ({
+    label: meta.label,
+    value: code,
+  })),
+];
 
 function getBadge(type: string) {
   return EVENT_META[type]?.badge ?? "badge-muted";
@@ -38,15 +46,38 @@ export default function EventsPage() {
   const [paused, setPaused] = useState(false);
   const [hours, setHours] = useState(1);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [eventTypeFilter, setEventTypeFilter] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUser, setDebouncedUser] = useState("");
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data, isLoading } = useRecentEvents({ limit: 100, hours, paused });
+  function handleUserSearch(val: string) {
+    setUserSearch(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedUser(val), 380);
+  }
+
+  const { data, isLoading } = useRecentEvents({
+    limit: 100,
+    hours,
+    paused,
+    event_type: eventTypeFilter,
+    user_external_id: debouncedUser,
+  });
   const events = data?.results ?? [];
 
   const handleClose = useCallback(() => setSelectedEventId(null), []);
 
+  const activeFilterCount = [eventTypeFilter !== "", debouncedUser !== ""].filter(Boolean).length;
+
+  const selectedTypeLabel =
+    EVENT_TYPE_OPTIONS.find((o) => o.value === eventTypeFilter)?.label ?? "Todos os tipos";
+
   return (
     <>
-    <div className="space-y-6">
+      <div className="space-y-5">
+        {/* Header */}
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Eventos</h1>
@@ -96,6 +127,92 @@ export default function EventsPage() {
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Event type dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowTypeMenu((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border transition-all ${
+                eventTypeFilter
+                  ? "bg-gold/10 text-gold border-gold/25"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {selectedTypeLabel}
+              <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
+            </button>
+            {showTypeMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowTypeMenu(false)}
+                />
+                <div className="absolute left-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-xl overflow-y-auto max-h-72 min-w-[220px]">
+                  {EVENT_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        setEventTypeFilter(opt.value);
+                        setShowTypeMenu(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                        eventTypeFilter === opt.value
+                          ? "bg-gold/10 text-gold"
+                          : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* User search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              value={userSearch}
+              onChange={(e) => handleUserSearch(e.target.value)}
+              placeholder="Filtrar por ID de usuário..."
+              className="bg-input border border-border rounded-md pl-8 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-gold/40 focus:border-gold/40 transition-colors w-56"
+            />
+            {userSearch && (
+              <button
+                onClick={() => handleUserSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20 text-xs font-medium text-gold">
+                <span className="w-4 h-4 rounded-full bg-gold text-[10px] font-bold text-background flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+                filtro{activeFilterCount !== 1 ? "s" : ""} ativo{activeFilterCount !== 1 ? "s" : ""}
+              </span>
+              <button
+                onClick={() => {
+                  setEventTypeFilter("");
+                  handleUserSearch("");
+                }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="w-3 h-3" />
+                Limpar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Event list */}
         <div className="card-vault overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border flex items-center gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span className="w-52">Evento</span>
@@ -123,11 +240,15 @@ export default function EventsPage() {
               <div className="px-4 py-12 text-center">
                 <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  Nenhum evento nas últimas {hours}h
+                  {activeFilterCount > 0
+                    ? "Nenhum evento com estes filtros nas últimas " + hours + "h"
+                    : `Nenhum evento nas últimas ${hours}h`}
                 </p>
-                <p className="text-xs text-muted-foreground/50 mt-1">
-                  Envie eventos via POST /api/v1/events/ingest/
-                </p>
+                {activeFilterCount === 0 && (
+                  <p className="text-xs text-muted-foreground/50 mt-1">
+                    Envie eventos via POST /api/v1/events/ingest/
+                  </p>
+                )}
               </div>
             )}
 
@@ -187,7 +308,8 @@ export default function EventsPage() {
         </div>
 
         <p className="text-xs text-muted-foreground/50 text-center">
-          Clique em um evento para ver detalhes · Atualiza a cada 5s · integre via POST /api/v1/events/ingest/
+          Clique em um evento para ver detalhes · Atualiza a cada 5s ·
+          integre via POST /api/v1/events/ingest/
         </p>
       </div>
 

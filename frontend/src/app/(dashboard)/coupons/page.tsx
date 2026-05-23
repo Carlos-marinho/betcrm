@@ -38,6 +38,7 @@ import {
   Copy,
   Check,
   AlertCircle,
+  AlertTriangle,
   Zap,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -222,6 +223,7 @@ export default function CouponsPage() {
 
   const active = coupons.filter((c) => c.is_active).length;
   const expired = coupons.filter((c) => !c.is_valid && c.is_active).length;
+  const reused = coupons.filter((c) => c.has_been_sent).length;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
@@ -241,6 +243,11 @@ export default function CouponsPage() {
                 {expired > 0 && (
                   <span className="text-orange-400 ml-1">
                     · {expired} expirado{expired > 1 ? "s" : ""}
+                  </span>
+                )}
+                {reused > 0 && (
+                  <span className="text-amber-500 ml-1">
+                    · {reused} já usado{reused > 1 ? "s" : ""}
                   </span>
                 )}
               </p>
@@ -330,6 +337,15 @@ export default function CouponsPage() {
                       >
                         <AlertCircle size={10} />
                         exp.
+                      </span>
+                    )}
+                    {coupon.has_been_sent && (
+                      <span
+                        className="ml-2 flex items-center gap-1 text-[10px] text-amber-500"
+                        title="Este código já foi enviado em um flow. Considere trocar para não repetir o mesmo cupom."
+                      >
+                        <AlertTriangle size={11} />
+                        já usado
                       </span>
                     )}
                   </div>

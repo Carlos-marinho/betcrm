@@ -42,6 +42,9 @@ export interface ProfileListItem {
   ftd_at: string | null;
   last_event_at: string | null;
   tags: string[];
+  profile_type: "player" | "affiliate";
+  is_active: boolean;
+  is_verified: boolean;
 }
 
 export interface Profile extends ProfileListItem {
@@ -75,11 +78,27 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
-export function useProfiles(params?: { search?: string; page?: number; ordering?: string }) {
+export interface ProfileFilters {
+  search?: string;
+  page?: number;
+  ordering?: string;
+  has_ftd?: "true" | "false" | "";
+  is_active?: "true" | "false" | "";
+  profile_type?: "player" | "affiliate" | "";
+  ltv_min?: string;
+  ltv_max?: string;
+}
+
+export function useProfiles(params?: ProfileFilters) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.set("search", params.search);
-  if (params?.page) searchParams.set("page", String(params.page));
+  if (params?.page && params.page > 1) searchParams.set("page", String(params.page));
   if (params?.ordering) searchParams.set("ordering", params.ordering);
+  if (params?.has_ftd) searchParams.set("has_ftd", params.has_ftd);
+  if (params?.is_active) searchParams.set("is_active", params.is_active);
+  if (params?.profile_type) searchParams.set("profile_type", params.profile_type);
+  if (params?.ltv_min) searchParams.set("ltv_min", params.ltv_min);
+  if (params?.ltv_max) searchParams.set("ltv_max", params.ltv_max);
   const qs = searchParams.toString();
 
   return useQuery<PaginatedResponse<ProfileListItem>>({
@@ -189,11 +208,16 @@ export interface Segment {
   updated_at: string;
 }
 
-export function useSegments() {
+export function useSegments(params?: { search?: string; is_active?: "true" | "false" | "" }) {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set("search", params.search);
+  if (params?.is_active) qs.set("is_active", params.is_active);
+  const qsStr = qs.toString();
+
   return useQuery<PaginatedResponse<Segment>>({
-    queryKey: ["segments"],
+    queryKey: ["segments", qsStr],
     queryFn: async () => {
-      const { data } = await api.get("/segments/");
+      const { data } = await api.get(`/segments/${qsStr ? `?${qsStr}` : ""}`);
       return data;
     },
   });
@@ -902,13 +926,17 @@ export function useRecentEvents(params?: {
   limit?: number;
   hours?: number;
   paused?: boolean;
+  event_type?: string;
+  user_external_id?: string;
 }) {
   const qs = new URLSearchParams();
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.hours) qs.set("hours", String(params.hours));
+  if (params?.event_type) qs.set("event_type", params.event_type);
+  if (params?.user_external_id) qs.set("user_external_id", params.user_external_id);
 
   return useQuery<{ count: number; results: RecentEvent[] }>({
-    queryKey: ["events", "recent", params?.hours ?? 1, params?.limit ?? 50],
+    queryKey: ["events", "recent", params?.hours ?? 1, params?.limit ?? 50, params?.event_type ?? "", params?.user_external_id ?? ""],
     queryFn: async () => {
       const { data } = await api.get(`/events/recent/?${qs}`);
       return data;
@@ -991,6 +1019,7 @@ export interface CampaignCoupon {
   flow_code: string;
   is_active: boolean;
   is_valid: boolean;
+  has_been_sent: boolean;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
