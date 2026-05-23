@@ -310,19 +310,26 @@ def get_event_detail(request, event_id):
 @permission_classes([IsAuthenticated])
 def list_recent_events(request):
     """
-    GET /api/v1/events/recent/?limit=50&hours=1
+    GET /api/v1/events/recent/?limit=50&hours=1&event_type=user.register&user_external_id=abc
 
     Feed de eventos recentes para o dashboard e página de eventos.
     """
-    limit = min(int(request.GET.get("limit", 50)), 200)
-    hours = int(request.GET.get("hours", 1))
+    try:
+        limit = min(int(request.GET.get("limit", 50)), 200)
+        hours = int(request.GET.get("hours", 1))
+    except (ValueError, TypeError):
+        return Response({"error": "limit e hours devem ser inteiros."}, status=400)
     event_type_code = request.GET.get("event_type")
+    user_external_id = request.GET.get("user_external_id", "").strip()
 
     cutoff = timezone.now() - timedelta(hours=hours)
-    qs = Event.objects.select_related("event_type").filter(occurred_at__gte=cutoff)
+    qs = Event.objects.select_related("event_type").filter(occurred_at__gte=cutoff).order_by("-occurred_at")
 
     if event_type_code:
         qs = qs.filter(event_type__code=event_type_code)
+
+    if user_external_id:
+        qs = qs.filter(user_external_id__icontains=user_external_id)
 
     total = qs.count()
     events = qs[:limit]

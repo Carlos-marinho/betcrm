@@ -17,6 +17,8 @@ class SegmentSerializer(serializers.ModelSerializer):
 class SegmentViewSet(viewsets.ModelViewSet):
     queryset = Segment.objects.all().order_by("name")
     serializer_class = SegmentSerializer
+    filterset_fields = ["is_active"]
+    search_fields = ["name", "code"]
 
     @action(detail=True, methods=["get"])
     def members(self, request, pk=None):

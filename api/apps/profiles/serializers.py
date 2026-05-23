@@ -81,4 +81,5 @@ class ProfileImportResultSerializer(serializers.Serializer):
     created = serializers.IntegerField()
     updated = serializers.IntegerField()
     skipped = serializers.IntegerField()
+    events_created = serializers.IntegerField()
     errors = serializers.ListField(child=serializers.DictField())

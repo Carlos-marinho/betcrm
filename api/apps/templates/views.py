@@ -1,5 +1,6 @@
 """Views do templates."""
 
+from django.db.models import BooleanField, Case, Exists, OuterRef, Value, When
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -162,6 +163,7 @@ class AbTestViewSet(viewsets.ModelViewSet):
 
 class CampaignCouponSerializer(serializers.ModelSerializer):
     is_valid = serializers.BooleanField(read_only=True)
+    has_been_sent = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = CampaignCoupon
@@ -169,10 +171,30 @@ class CampaignCouponSerializer(serializers.ModelSerializer):
 
 
 class CampaignCouponViewSet(viewsets.ModelViewSet):
-    queryset = CampaignCoupon.objects.all().order_by("key")
     serializer_class = CampaignCouponSerializer
     filterset_fields = ["is_active", "flow_code"]
     search_fields = ["key", "code", "description", "flow_code"]
+
+    def get_queryset(self):
+        from apps.flows.models import FlowExecution, FlowScheduleRun
+
+        has_been_sent = Case(
+            When(
+                Exists(FlowExecution.objects.filter(flow__code=OuterRef("flow_code"))),
+                then=Value(True),
+            ),
+            When(
+                Exists(
+                    FlowScheduleRun.objects.filter(
+                        flow__code=OuterRef("flow_code"), status="completed"
+                    )
+                ),
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+        return CampaignCoupon.objects.annotate(has_been_sent=has_been_sent).order_by("key")
 
     def perform_update(self, serializer):
         from django.core.cache import cache
