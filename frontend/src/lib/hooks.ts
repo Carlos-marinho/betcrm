@@ -246,8 +246,11 @@ export interface MessageTemplate {
   channel: "email" | "sms" | "push" | "whatsapp";
   category: string;
   subject: string;
-  body_html: string;
-  body_text: string;
+  html_body: string;
+  text_body: string;
+  from_email: string;
+  from_name: string;
+  reply_to: string;
   banner_asset: number | null;
   banner_asset_url: string | null;
   is_active: boolean;

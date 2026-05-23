@@ -61,8 +61,8 @@ const templateSchema = z.object({
   channel: z.enum(["email", "sms", "push", "whatsapp"]),
   category: z.string().optional(),
   subject: z.string().optional(),
-  body_text: z.string().min(1, "Corpo é obrigatório"),
-  body_html: z.string().optional(),
+  text_body: z.string().min(1, "Corpo é obrigatório"),
+  html_body: z.string().optional(),
   banner_asset: z.number().nullable().optional(),
   is_active: z.boolean().default(true),
 });
@@ -656,15 +656,15 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
       ? {
           name: template.name, code: template.code, channel: template.channel,
           category: template.category, subject: template.subject,
-          body_text: template.body_text, body_html: template.body_html,
+          text_body: template.text_body, html_body: template.html_body,
           banner_asset: template.banner_asset,
           is_active: template.is_active,
         }
-      : { name: "", code: "", channel: "email", category: "", subject: "", body_text: "", body_html: "", banner_asset: null, is_active: true },
+      : { name: "", code: "", channel: "email", category: "", subject: "", text_body: "", html_body: "", banner_asset: null, is_active: true },
   });
 
   const watchChannel = watch("channel");
-  const watchBodyText = watch("body_text");
+  const watchBodyText = watch("text_body");
   const watchSubject = watch("subject");
   const isActiveVal = watch("is_active");
 
@@ -675,11 +675,11 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
         ? {
             name: template.name, code: template.code, channel: template.channel,
             category: template.category, subject: template.subject,
-            body_text: template.body_text, body_html: template.body_html,
+            text_body: template.text_body, html_body: template.html_body,
             banner_asset: template.banner_asset,
             is_active: template.is_active,
           }
-        : { name: "", code: "", channel: "email", category: "", subject: "", body_text: "", body_html: "", banner_asset: null, is_active: true }
+        : { name: "", code: "", channel: "email", category: "", subject: "", text_body: "", html_body: "", banner_asset: null, is_active: true }
     );
     // Pré-popula o preview do banner se template já tem um
     if (template?.banner_asset_url) {
@@ -700,7 +700,7 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
   }
 
   function insertVar(v: string) {
-    setValue("body_text", (watch("body_text") || "") + v);
+    setValue("text_body", (watch("text_body") || "") + v);
   }
 
   async function onSubmit(values: TemplateForm) {
@@ -890,9 +890,9 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
                   id="tpl-body"
                   rows={5}
                   placeholder={`Olá {{ profile.first_name }},\n\nSeu depósito de R$ {{ event.amount }} foi confirmado!`}
-                  {...register("body_text")}
+                  {...register("text_body")}
                 />
-                {errors.body_text && <p className="text-xs text-destructive">{errors.body_text.message}</p>}
+                {errors.text_body && <p className="text-xs text-destructive">{errors.text_body.message}</p>}
               </div>
 
               {watchChannel === "email" && (
@@ -905,7 +905,7 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
                     rows={4}
                     className="font-data text-xs"
                     placeholder="<html>...</html>"
-                    {...register("body_html")}
+                    {...register("html_body")}
                   />
                 </div>
               )}
