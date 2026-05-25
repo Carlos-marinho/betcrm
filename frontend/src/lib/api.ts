@@ -1,7 +1,7 @@
 import axios from "axios";
 import { clearToken, getRefreshToken, getToken, setToken } from "./auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 let refreshPromise: Promise<string> | null = null;
 
 export const api = axios.create({
