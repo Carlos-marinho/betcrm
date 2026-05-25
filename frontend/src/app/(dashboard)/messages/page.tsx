@@ -131,189 +131,181 @@ export default function MessagesPage() {
   return (
     <>
       <SendMessageModal open={sendModalOpen} onClose={() => setSendModalOpen(false)} />
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="font-display font-bold text-2xl">Mensagens</h1>
-            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
-              {isLoading ? <Skeleton className="h-3.5 w-40" /> : `${data?.count.toLocaleString("pt-BR") ?? 0} mensagens no período`}
-            </span>
+      <div className="flex flex-col flex-1 min-h-0">
+
+        {/* ── Sticky header: title + stats + filters + column headers ── */}
+        <div className="shrink-0 px-8 pt-8 pb-0 bg-background border-b border-border/30">
+          {/* Title row */}
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <h1 className="font-display font-bold text-2xl">Mensagens</h1>
+              <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+                {isLoading ? <Skeleton className="h-3.5 w-40" /> : `${data?.count.toLocaleString("pt-BR") ?? 0} mensagens no período`}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSendModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-background text-xs font-semibold hover:bg-gold/90 transition-colors"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Enviar mensagem
+              </button>
+              <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+                {PERIOD_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStatsDays(opt.value)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      statsDays === opt.value
+                        ? "bg-white/10 text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-teal">
+                <span className="live-dot" />
+                atualiza a cada 30s
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSendModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-background text-xs font-semibold hover:bg-gold/90 transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-              Enviar mensagem
-            </button>
-            {/* Seletor de período das métricas */}
+
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            {statCards.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div key={stat.label} className="card-vault p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                    <Icon className={`w-4 h-4 ${stat.accent}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    {statsLoading ? (
+                      <Skeleton className="h-5 w-16 mt-0.5" />
+                    ) : (
+                      <p className="font-data text-lg font-semibold text-foreground leading-tight">{stat.value}</p>
+                    )}
+                    {!statsLoading && stat.sub && (
+                      <p className={`text-xs font-data ${stat.accent} opacity-70`}>{stat.sub} ({periodLabel})</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {PERIOD_OPTIONS.map((opt) => (
+              {CHANNEL_FILTERS.map((f) => (
                 <button
-                  key={opt.value}
-                  onClick={() => setStatsDays(opt.value)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                    statsDays === opt.value
-                      ? "bg-white/10 text-foreground"
+                  key={f.value}
+                  onClick={() => { setChannelFilter(f.value); setPage(1); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    channelFilter === f.value
+                      ? "bg-gold/10 text-gold border border-gold/20"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {opt.label}
+                  {f.label}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-teal">
-              <span className="live-dot" />
-              atualiza a cada 30s
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => { setStatusFilter(f.value); setPage(1); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    statusFilter === f.value
+                      ? "bg-gold/10 text-gold border border-gold/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Column headers */}
+          <div className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+            <div>Canal</div>
+            <div>Usuário</div>
+            <div>Template</div>
+            <div>Assunto</div>
+            <div>Status</div>
+            <div>Enviada</div>
+          </div>
         </div>
 
-        {/* Stats strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {statCards.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <div key={stat.label} className="card-vault p-4 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                  <Icon className={`w-4 h-4 ${stat.accent}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  {statsLoading ? (
-                    <Skeleton className="h-5 w-16 mt-0.5" />
-                  ) : (
-                    <p className="font-data text-lg font-semibold text-foreground leading-tight">
-                      {stat.value}
-                    </p>
-                  )}
-                  {!statsLoading && stat.sub && (
-                    <p className={`text-xs font-data ${stat.accent} opacity-70`}>{stat.sub} ({periodLabel})</p>
-                  )}
-                </div>
+        {/* ── Scrollable rows ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="divide-y divide-border/50">
+            {isLoading && Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-3">
+                <div><Skeleton className="h-4 w-14" /></div>
+                <div><Skeleton className="h-4 w-20" /></div>
+                <div><Skeleton className="h-4 w-24" /></div>
+                <div><Skeleton className="h-4 w-40" /></div>
+                <div><Skeleton className="h-4 w-16" /></div>
+                <div><Skeleton className="h-4 w-20" /></div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-            {CHANNEL_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => { setChannelFilter(f.value); setPage(1); }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  channelFilter === f.value
-                    ? "bg-gold/10 text-gold border border-gold/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {f.label}
-              </button>
             ))}
-          </div>
 
-          <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => { setStatusFilter(f.value); setPage(1); }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  statusFilter === f.value
-                    ? "bg-gold/10 text-gold border border-gold/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            {!isLoading && data?.results.map((msg) => {
+              const ChanIcon = CHANNEL_ICON[msg.channel] ?? Mail;
+              const chanBadge = CHANNEL_BADGE[msg.channel] ?? "badge-muted";
+              const statusCfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.sent;
 
-        {/* Table */}
-        <div className="card-vault overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Canal</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Usuário</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Template</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Assunto</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Enviada</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && Array.from({ length: 10 }).map((_, i) => (
-                  <tr key={i} className="border-b border-border/50">
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                  </tr>
-                ))}
+              return (
+                <div key={msg.id} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center">
+                    <span className={chanBadge}>
+                      <ChanIcon className="w-3 h-3" />
+                      {msg.channel}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="font-data text-xs text-muted-foreground truncate">{msg.profile_external_id}</span>
+                  </div>
+                  <div className="flex items-center">
+                    {msg.template_code
+                      ? <span className="font-data text-xs text-foreground truncate">{msg.template_code}</span>
+                      : <span className="text-muted-foreground/30">—</span>
+                    }
+                  </div>
+                  <div className="flex items-center min-w-0">
+                    <span className="text-xs text-muted-foreground truncate">{msg.subject || "—"}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className={statusCfg.badge}>{statusCfg.label}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-xs text-muted-foreground">
+                      {msg.sent_at
+                        ? formatDistanceToNow(new Date(msg.sent_at), { locale: ptBR, addSuffix: true })
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
 
-                {!isLoading && data?.results.map((msg) => {
-                  const ChanIcon = CHANNEL_ICON[msg.channel] ?? Mail;
-                  const chanBadge = CHANNEL_BADGE[msg.channel] ?? "badge-muted";
-                  const statusCfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.sent;
-
-                  return (
-                    <tr key={msg.id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={chanBadge}>
-                          <ChanIcon className="w-3 h-3" />
-                          {msg.channel}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-data text-xs text-muted-foreground">{msg.profile_external_id}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {msg.template_code
-                          ? <span className="font-data text-xs text-foreground">{msg.template_code}</span>
-                          : <span className="text-muted-foreground/30">—</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3 max-w-[200px]">
-                        <span className="text-xs text-muted-foreground truncate block">
-                          {msg.subject || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={statusCfg.badge}>{statusCfg.label}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs text-muted-foreground">
-                          {msg.sent_at
-                            ? formatDistanceToNow(new Date(msg.sent_at), { locale: ptBR, addSuffix: true })
-                            : "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!isLoading && data?.results.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center">
-                      <Mail className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground">Nenhuma mensagem encontrada para este filtro.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            {!isLoading && data?.results.length === 0 && (
+              <div className="px-4 py-16 text-center">
+                <Mail className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Nenhuma mensagem encontrada para este filtro.</p>
+              </div>
+            )}
           </div>
 
           {data && data.count > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
               <p className="text-xs text-muted-foreground font-data">
                 Página {page} de {totalPages} · {data.count.toLocaleString("pt-BR")} total
               </p>

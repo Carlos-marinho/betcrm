@@ -99,7 +99,7 @@ export default function ProfileDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="flex-1 overflow-y-auto"><div className="p-8 space-y-6">
           {/* Back link */}
           <Skeleton className="h-4 w-20" />
 
@@ -167,12 +167,13 @@ export default function ProfileDetailPage() {
             </div>
           </div>
         </div>
+      </div>
     );
   }
 
   if (isError || !profile) {
     return (
-      <div className="card-vault p-12 text-center space-y-4">
+      <div className="flex-1 overflow-y-auto"><div className="p-8"><div className="card-vault p-12 text-center space-y-4">
           <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
           <div>
             <p className="font-display font-semibold text-foreground mb-1">Profile não encontrado</p>
@@ -186,6 +187,7 @@ export default function ProfileDetailPage() {
             Voltar para Profiles
           </button>
         </div>
+    </div></div>
     );
   }
 
@@ -193,7 +195,7 @@ export default function ProfileDetailPage() {
   const location = [profile.city, profile.state, profile.country].filter(Boolean).join(", ");
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 overflow-y-auto"><div className="p-8 space-y-6">
       {/* Back */}
         <Link
           href="/profiles"
@@ -358,6 +360,7 @@ export default function ProfileDetailPage() {
 
       {/* Real Timeline */}
       <TimelineSection profileId={profileId} />
+    </div>
     </div>
   );
 }

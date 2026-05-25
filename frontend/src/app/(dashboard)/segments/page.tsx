@@ -488,7 +488,11 @@ export default function SegmentsPage() {
 
   return (
     <>
-      <div className="space-y-5">
+      <div className="flex flex-col flex-1 min-h-0">
+
+        {/* ── Sticky header: title + search + filters ── */}
+        <div className="shrink-0 px-8 pt-8 pb-4 bg-background border-b border-border/30">
+
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
@@ -560,6 +564,11 @@ export default function SegmentsPage() {
             </span>
           )}
         </div>
+
+        </div>{/* end sticky header */}
+
+        {/* ── Scrollable content ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-8 py-5">
 
         {/* Loading skeletons */}
         {isLoading && (
@@ -704,7 +713,9 @@ export default function SegmentsPage() {
             ))}
           </div>
         )}
-      </div>
+
+        </div>{/* end scrollable */}
+      </div>{/* end flex col */}
 
       <SegmentModal
         open={modalOpen}

@@ -12,7 +12,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -787,228 +786,251 @@ export default function FlowsPage() {
 
   return (
     <>
-    <div className="space-y-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="font-display font-bold text-2xl">Fluxos</h1>
-            <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
-              {isLoading ? <Skeleton className="h-3.5 w-28" /> : `${data?.count ?? 0} fluxos cadastrados`}
-            </span>
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* ── Sticky header: title + "Novo Fluxo" + tab navigation ── */}
+        <div className="shrink-0 px-8 pt-8 pb-0 bg-background border-b border-border/30">
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <h1 className="font-display font-bold text-2xl">Fluxos</h1>
+              <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
+                {isLoading ? <Skeleton className="h-3.5 w-28" /> : `${data?.count ?? 0} fluxos cadastrados`}
+              </span>
+            </div>
+            <button
+              onClick={handleNew}
+              className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Fluxo
+            </button>
           </div>
-          <button
-            onClick={handleNew}
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Novo Fluxo
-          </button>
+
+          {/* Tab navigation */}
+          <div className="flex items-center gap-0">
+            {[
+              { value: "flows", label: "Fluxos" },
+              { value: "executions", label: "Execuções" },
+            ].map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setTab(t.value)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
+                  tab === t.value
+                    ? "border-gold text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="flows">Fluxos</TabsTrigger>
-            <TabsTrigger value="executions">Execuções</TabsTrigger>
-          </TabsList>
-
+        {/* ── Scrollable content ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-8 py-5">
           {/* ── FLOWS TAB ── */}
-          <TabsContent value="flows">
-            {isLoading && (
-              <div className="grid gap-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="card-vault p-4 flex items-center gap-4">
-                    <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-3.5 w-40" />
-                      <Skeleton className="h-3 w-64" />
+          {tab === "flows" && (
+            <>
+              {isLoading && (
+                <div className="grid gap-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="card-vault p-4 flex items-center gap-4">
+                      <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3.5 w-40" />
+                        <Skeleton className="h-3 w-64" />
+                      </div>
+                      <Skeleton className="h-7 w-20 rounded-md shrink-0" />
                     </div>
-                    <Skeleton className="h-7 w-20 rounded-md shrink-0" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!isLoading && data?.results.length === 0 && (
-              <div className="card-vault p-12 text-center">
-                <Workflow className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm font-medium text-foreground mb-1">Nenhum fluxo criado ainda</p>
-                <p className="text-sm text-muted-foreground mb-4">Automatize o engajamento dos seus usuários.</p>
-                <button
-                  onClick={handleNew}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Criar fluxo
-                </button>
-              </div>
-            )}
-
-            {!isLoading && data && (
-            <div className="grid gap-3 animate-fade-up">
-              {data.results.map((flow) => (
-                <div
-                  key={flow.id}
-                  className="card-vault p-4 flex items-center gap-4 hover:border-gold/20 transition-all group"
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    flow.is_active
-                      ? flow.trigger_type === "scheduled"
-                        ? "bg-violet-500/10 text-violet-400"
-                        : "bg-teal/10 text-teal"
-                      : "bg-white/5 text-muted-foreground"
-                  }`}>
-                    {flow.trigger_type === "scheduled"
-                      ? <CalendarClock className="w-4 h-4" />
-                      : <Workflow className="w-4 h-4" />}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-medium text-sm text-foreground truncate">{flow.name}</span>
-                      {flow.is_active ? (
-                        <span className="badge-teal">ativo</span>
-                      ) : (
-                        <span className="badge-muted">inativo</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                      <span className="font-data">{flow.code}</span>
-                      <TriggerBadge flow={flow} />
-                      <ScheduleLastRun flow={flow} />
-                      <span className="shrink-0">
-                        atualizado{" "}
-                        {formatDistanceToNow(new Date(flow.updated_at), { locale: ptBR, addSuffix: true })}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleEdit(flow)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
-                      title="Editar metadados"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <Link
-                      href={`/flows/${flow.id}`}
-                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition-all"
-                      title="Abrir editor de fluxo"
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      Editor
-                    </Link>
-                    <button
-                      onClick={() => handleToggle(flow.id, flow.is_active)}
-                      disabled={toggle.isPending}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                        flow.is_active
-                          ? "bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20"
-                          : "bg-teal/10 text-teal border border-teal/20 hover:bg-teal/20"
-                      } disabled:opacity-50`}
-                    >
-                      {flow.is_active ? (
-                        <><Pause className="w-3.5 h-3.5" /> Pausar</>
-                      ) : (
-                        <><Play className="w-3.5 h-3.5" /> Ativar</>
-                      )}
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            )}
-          </TabsContent>
+              )}
+
+              {!isLoading && data?.results.length === 0 && (
+                <div className="card-vault p-12 text-center">
+                  <Workflow className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Nenhum fluxo criado ainda</p>
+                  <p className="text-sm text-muted-foreground mb-4">Automatize o engajamento dos seus usuários.</p>
+                  <button
+                    onClick={handleNew}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gold text-primary-foreground hover:bg-gold/90 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Criar fluxo
+                  </button>
+                </div>
+              )}
+
+              {!isLoading && data && (
+                <div className="grid gap-3 animate-fade-up">
+                  {data.results.map((flow) => (
+                    <div
+                      key={flow.id}
+                      className="card-vault p-4 flex items-center gap-4 hover:border-gold/20 transition-all group"
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        flow.is_active
+                          ? flow.trigger_type === "scheduled"
+                            ? "bg-violet-500/10 text-violet-400"
+                            : "bg-teal/10 text-teal"
+                          : "bg-white/5 text-muted-foreground"
+                      }`}>
+                        {flow.trigger_type === "scheduled"
+                          ? <CalendarClock className="w-4 h-4" />
+                          : <Workflow className="w-4 h-4" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-sm text-foreground truncate">{flow.name}</span>
+                          {flow.is_active ? (
+                            <span className="badge-teal">ativo</span>
+                          ) : (
+                            <span className="badge-muted">inativo</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                          <span className="font-data">{flow.code}</span>
+                          <TriggerBadge flow={flow} />
+                          <ScheduleLastRun flow={flow} />
+                          <span className="shrink-0">
+                            atualizado{" "}
+                            {formatDistanceToNow(new Date(flow.updated_at), { locale: ptBR, addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleEdit(flow)}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all"
+                          title="Editar metadados"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <Link
+                          href={`/flows/${flow.id}`}
+                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition-all"
+                          title="Abrir editor de fluxo"
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                          Editor
+                        </Link>
+                        <button
+                          onClick={() => handleToggle(flow.id, flow.is_active)}
+                          disabled={toggle.isPending}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            flow.is_active
+                              ? "bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20"
+                              : "bg-teal/10 text-teal border border-teal/20 hover:bg-teal/20"
+                          } disabled:opacity-50`}
+                        >
+                          {flow.is_active ? (
+                            <><Pause className="w-3.5 h-3.5" /> Pausar</>
+                          ) : (
+                            <><Play className="w-3.5 h-3.5" /> Ativar</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           {/* ── EXECUTIONS TAB ── */}
-          <TabsContent value="executions">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1 w-fit">
-                {STATE_FILTERS.map((f) => (
-                  <button
-                    key={f.value}
-                    onClick={() => setStateFilter(f.value)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      stateFilter === f.value
-                        ? "bg-gold/10 text-gold border border-gold/20"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
+          {tab === "executions" && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1 w-fit">
+                  {STATE_FILTERS.map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => setStateFilter(f.value)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        stateFilter === f.value
+                          ? "bg-gold/10 text-gold border border-gold/20"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-teal">
+                  <span className="live-dot" />
+                  atualiza a cada 15s
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-teal">
-                <span className="live-dot" />
-                atualiza a cada 15s
-              </div>
-            </div>
 
-            <div className="card-vault overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fluxo</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Usuário</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Estado</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Iniciou</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Próxima exec.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {execLoading && Array.from({ length: 8 }).map((_, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                        <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                        <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                        <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                        <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+              <div className="card-vault overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fluxo</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Usuário</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Estado</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Iniciou</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Próxima exec.</th>
                       </tr>
-                    ))}
-                    {!execLoading && executions?.results.map((exec) => {
-                      const cfg = STATE_CONFIG[exec.state] ?? STATE_CONFIG.exited;
-                      return (
-                        <tr key={exec.id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
-                          <td className="px-4 py-3">
-                            <span className="font-data text-xs text-foreground">{exec.flow_code}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-data text-xs text-muted-foreground">{exec.profile_external_id}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={cfg.badge}>{cfg.label}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(exec.started_at), { locale: ptBR, addSuffix: true })}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {exec.next_run_at ? (
+                    </thead>
+                    <tbody>
+                      {execLoading && Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                        </tr>
+                      ))}
+                      {!execLoading && executions?.results.map((exec) => {
+                        const cfg = STATE_CONFIG[exec.state] ?? STATE_CONFIG.exited;
+                        return (
+                          <tr key={exec.id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="font-data text-xs text-foreground">{exec.flow_code}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-data text-xs text-muted-foreground">{exec.profile_external_id}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={cfg.badge}>{cfg.label}</span>
+                            </td>
+                            <td className="px-4 py-3">
                               <span className="text-xs text-muted-foreground">
-                                <Clock className="w-3 h-3 inline mr-1" />
-                                {formatDistanceToNow(new Date(exec.next_run_at), { locale: ptBR, addSuffix: true })}
+                                {formatDistanceToNow(new Date(exec.started_at), { locale: ptBR, addSuffix: true })}
                               </span>
-                            ) : (
-                              <span className="text-muted-foreground/30">—</span>
-                            )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {exec.next_run_at ? (
+                                <span className="text-xs text-muted-foreground">
+                                  <Clock className="w-3 h-3 inline mr-1" />
+                                  {formatDistanceToNow(new Date(exec.next_run_at), { locale: ptBR, addSuffix: true })}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/30">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!execLoading && executions?.results.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                            Nenhuma execução encontrada.
                           </td>
                         </tr>
-                      );
-                    })}
-                    {!execLoading && executions?.results.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                          Nenhuma execução encontrada.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </>
+          )}
+        </div>
       </div>
 
       <FlowModal

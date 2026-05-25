@@ -76,153 +76,144 @@ export default function EventsPage() {
 
   return (
     <>
-      <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="font-display font-bold text-2xl">Eventos</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Feed em tempo real de eventos da plataforma
-              {data ? ` · ${data.count} eventos` : ""}
-            </p>
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* ── Sticky header: title + controls + filters + column headers ── */}
+        <div className="shrink-0 px-8 pt-8 pb-0 bg-background border-b border-border/30">
+          {/* Title + controls */}
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <h1 className="font-display font-bold text-2xl">Eventos</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Feed em tempo real de eventos da plataforma
+                {data ? ` · ${data.count} eventos` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+                {[
+                  { label: "1h", value: 1 },
+                  { label: "6h", value: 6 },
+                  { label: "24h", value: 24 },
+                ].map((w) => (
+                  <button
+                    key={w.value}
+                    onClick={() => setHours(w.value)}
+                    className={`px-2.5 py-1 rounded text-xs font-data font-medium transition-all ${
+                      hours === w.value
+                        ? "bg-gold/10 text-gold border border-gold/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+              {!paused && (
+                <div className="flex items-center gap-1.5 text-xs text-teal">
+                  <span className="live-dot" />
+                  ao vivo
+                </div>
+              )}
+              <button
+                onClick={() => setPaused((v) => !v)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                  paused
+                    ? "bg-teal/10 text-teal border-teal/20"
+                    : "bg-white/5 text-muted-foreground border-border hover:text-foreground"
+                }`}
+              >
+                {paused ? "▶ Retomar" : "⏸ Pausar"}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Window selector */}
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {[
-                { label: "1h", value: 1 },
-                { label: "6h", value: 6 },
-                { label: "24h", value: 24 },
-              ].map((w) => (
-                <button
-                  key={w.value}
-                  onClick={() => setHours(w.value)}
-                  className={`px-2.5 py-1 rounded text-xs font-data font-medium transition-all ${
-                    hours === w.value
-                      ? "bg-gold/10 text-gold border border-gold/20"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {w.label}
-                </button>
-              ))}
+
+          {/* Filters */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowTypeMenu((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border transition-all ${
+                  eventTypeFilter
+                    ? "bg-gold/10 text-gold border-gold/25"
+                    : "bg-card border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                {selectedTypeLabel}
+                <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
+              </button>
+              {showTypeMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowTypeMenu(false)} />
+                  <div className="absolute left-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-xl overflow-y-auto max-h-72 min-w-[220px]">
+                    {EVENT_TYPE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setEventTypeFilter(opt.value); setShowTypeMenu(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          eventTypeFilter === opt.value
+                            ? "bg-gold/10 text-gold"
+                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
-            {!paused && (
-              <div className="flex items-center gap-1.5 text-xs text-teal">
-                <span className="live-dot" />
-                ao vivo
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input
+                value={userSearch}
+                onChange={(e) => handleUserSearch(e.target.value)}
+                placeholder="Filtrar por ID de usuário..."
+                className="bg-input border border-border rounded-md pl-8 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-gold/40 focus:border-gold/40 transition-colors w-56"
+              />
+              {userSearch && (
+                <button
+                  onClick={() => handleUserSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {activeFilterCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20 text-xs font-medium text-gold">
+                  <span className="w-4 h-4 rounded-full bg-gold text-[10px] font-bold text-background flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                  filtro{activeFilterCount !== 1 ? "s" : ""} ativo{activeFilterCount !== 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={() => { setEventTypeFilter(""); handleUserSearch(""); }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  Limpar
+                </button>
               </div>
             )}
-            <button
-              onClick={() => setPaused((v) => !v)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
-                paused
-                  ? "bg-teal/10 text-teal border-teal/20"
-                  : "bg-white/5 text-muted-foreground border-border hover:text-foreground"
-              }`}
-            >
-              {paused ? "▶ Retomar" : "⏸ Pausar"}
-            </button>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Event type dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowTypeMenu((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border transition-all ${
-                eventTypeFilter
-                  ? "bg-gold/10 text-gold border-gold/25"
-                  : "bg-card border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              {selectedTypeLabel}
-              <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
-            </button>
-            {showTypeMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowTypeMenu(false)}
-                />
-                <div className="absolute left-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-xl overflow-y-auto max-h-72 min-w-[220px]">
-                  {EVENT_TYPE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => {
-                        setEventTypeFilter(opt.value);
-                        setShowTypeMenu(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                        eventTypeFilter === opt.value
-                          ? "bg-gold/10 text-gold"
-                          : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
 
-          {/* User search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input
-              value={userSearch}
-              onChange={(e) => handleUserSearch(e.target.value)}
-              placeholder="Filtrar por ID de usuário..."
-              className="bg-input border border-border rounded-md pl-8 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-gold/40 focus:border-gold/40 transition-colors w-56"
-            />
-            {userSearch && (
-              <button
-                onClick={() => handleUserSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {activeFilterCount > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold/10 border border-gold/20 text-xs font-medium text-gold">
-                <span className="w-4 h-4 rounded-full bg-gold text-[10px] font-bold text-background flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-                filtro{activeFilterCount !== 1 ? "s" : ""} ativo{activeFilterCount !== 1 ? "s" : ""}
-              </span>
-              <button
-                onClick={() => {
-                  setEventTypeFilter("");
-                  handleUserSearch("");
-                }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-              >
-                <X className="w-3 h-3" />
-                Limpar
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Event list */}
-        <div className="card-vault overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border flex items-center gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {/* Column headers */}
+          <div className="flex items-center gap-4 px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
             <span className="w-52">Evento</span>
             <span className="w-28">Usuário</span>
             <span className="w-28">Valor</span>
             <span className="flex-1">Quando</span>
             <span className="w-6" />
           </div>
+        </div>
 
-          <div className="divide-y divide-border/50 max-h-[60vh] overflow-y-auto">
+        {/* ── Scrollable rows ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="divide-y divide-border/50">
             {isLoading && (
               <div className="space-y-1.5 p-4">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -237,7 +228,7 @@ export default function EventsPage() {
             )}
 
             {!isLoading && events.length === 0 && (
-              <div className="px-4 py-12 text-center">
+              <div className="px-4 py-16 text-center">
                 <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
                   {activeFilterCount > 0
@@ -277,9 +268,7 @@ export default function EventsPage() {
                     {ev.amount != null ? (
                       <span className="font-data text-xs text-foreground">
                         R${" "}
-                        {Number(ev.amount).toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
+                        {Number(ev.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </span>
                     ) : (
                       <span className="text-muted-foreground/30">—</span>
@@ -287,10 +276,7 @@ export default function EventsPage() {
                   </div>
                   <div className="flex-1">
                     <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(ev.occurred_at), {
-                        locale: ptBR,
-                        addSuffix: true,
-                      })}
+                      {formatDistanceToNow(new Date(ev.occurred_at), { locale: ptBR, addSuffix: true })}
                     </span>
                   </div>
                   <div className="w-6 flex items-center justify-center">
@@ -305,12 +291,12 @@ export default function EventsPage() {
                 </button>
               ))}
           </div>
-        </div>
 
-        <p className="text-xs text-muted-foreground/50 text-center">
-          Clique em um evento para ver detalhes · Atualiza a cada 5s ·
-          integre via POST /api/v1/events/ingest/
-        </p>
+          <p className="text-xs text-muted-foreground/50 text-center px-8 py-3">
+            Clique em um evento para ver detalhes · Atualiza a cada 5s ·
+            integre via POST /api/v1/events/ingest/
+          </p>
+        </div>
       </div>
 
       <EventDetailDrawer eventId={selectedEventId} onClose={handleClose} />

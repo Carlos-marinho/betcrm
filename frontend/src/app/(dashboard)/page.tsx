@@ -48,7 +48,8 @@ export default function DashboardPage() {
   const wLabel = windowLabel(hours);
 
   return (
-    <div className="space-y-8">
+    <div className="flex-1 overflow-y-auto">
+    <div className="p-8 space-y-8">
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
@@ -238,6 +239,7 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+    </div>
     </div>
   );
 }

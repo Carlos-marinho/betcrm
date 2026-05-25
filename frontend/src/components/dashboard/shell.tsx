@@ -133,8 +133,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
-        <div key={pathname} className="p-8 max-w-[1400px] mx-auto animate-page-in">
+      <main className="flex-1 overflow-hidden flex flex-col min-h-0">
+        <div key={pathname} className="flex-1 min-h-0 flex flex-col w-full max-w-[1400px] mx-auto animate-page-in">
           {children}
         </div>
       </main>

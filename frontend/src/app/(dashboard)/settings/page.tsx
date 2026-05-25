@@ -884,7 +884,8 @@ export default function SettingsPage() {
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="flex-1 overflow-y-auto">
+    <div className="p-8 space-y-6">
         <div>
           <h1 className="font-display font-bold text-2xl">Configurações</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -1288,6 +1289,7 @@ Content-Type: application/json
           </TabsContent>
         </Tabs>
       </div>
+    </div>
 
       <ProviderModal
         open={providerModalOpen}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   FileText, Mail, MessageSquare, Bell, MessageCircle, Plus, Pencil, Trash2, Eye,
   FlaskConical, Loader2, CheckCircle, AlertCircle, User, ImageIcon, X, Images, RefreshCw,
-  ChevronDown, Send, Search,
+  ChevronDown, Send, Search, Maximize2, Monitor, Smartphone, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -92,6 +93,11 @@ interface ApiPreviewModalProps {
 function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
   const previewMutation = useTemplatePreview();
   const sendMutation = useSendMessage();
+  const [fullscreenHtml, setFullscreenHtml] = useState<string | null>(null);
+  const [fsViewMode, setFsViewMode] = useState<"desktop" | "mobile">("desktop");
+  const [fsZoom, setFsZoom] = useState(0.65);
+  const [fsEmailHeight, setFsEmailHeight] = useState(2000);
+  const fsIframeRef = useRef<HTMLIFrameElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const { data: profilesData, isLoading: profilesLoading } = useProfiles({ search: debouncedSearch });
@@ -160,10 +166,151 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
   }
 
   const result = previewMutation.data;
+  // Reset fullscreen state when opening (always start in desktop mode)
+  useEffect(() => {
+    if (fullscreenHtml) {
+      setFsViewMode("desktop");
+      setFsZoom(0.65);
+      setFsEmailHeight(2000);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenHtml]);
+
+  // Adjust default zoom when switching modes (height stays — iframe width never changes)
+  useEffect(() => {
+    setFsZoom(fsViewMode === "mobile" ? 1.0 : 0.65);
+  }, [fsViewMode]);
+
+  function handleFsIframeLoad() {
+    try {
+      const h = fsIframeRef.current?.contentDocument?.body?.scrollHeight;
+      if (h && h > 100) setFsEmailHeight(h + 40);
+    } catch {}
+  }
+
+  // Iframe always renders at 700px (actual email layout width).
+  // Mobile mode applies an extra scale factor so the full 700px email
+  // fits visually inside a 390px "phone frame" — content isn't clipped.
+  const IFRAME_W = 700;
+  const PHONE_W = 390;
+  const iframeScale = fsViewMode === "mobile" ? (PHONE_W / IFRAME_W) * fsZoom : fsZoom;
+  const displayedWidth = fsViewMode === "mobile"
+    ? Math.round(PHONE_W * fsZoom)
+    : Math.round(IFRAME_W * fsZoom);
+
   const Icon = template ? (channelIcon[template.channel] ?? FileText) : FileText;
   const badge = template ? (channelBadge[template.channel] ?? "badge-muted") : "badge-muted";
 
   return (
+    <>
+    {fullscreenHtml && typeof document !== "undefined" && createPortal(
+      <div className="fixed inset-0 z-[200] flex flex-col bg-zinc-900">
+        {/* Toolbar */}
+        <div className="h-12 flex items-center gap-3 px-4 bg-zinc-950/80 border-b border-white/10 shrink-0">
+          {/* Desktop / Mobile toggle */}
+          <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+            <button
+              onClick={() => setFsViewMode("desktop")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                fsViewMode === "desktop"
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              Desktop
+            </button>
+            <button
+              onClick={() => setFsViewMode("mobile")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                fsViewMode === "mobile"
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              Mobile
+            </button>
+          </div>
+
+          {/* Zoom controls */}
+          <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+            <button
+              onClick={() => setFsZoom((z) => Math.max(0.2, parseFloat((z - 0.1).toFixed(1))))}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              title="Diminuir zoom"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="w-10 text-center text-xs font-data text-white/60 select-none tabular-nums">
+              {Math.round(fsZoom * 100)}%
+            </span>
+            <button
+              onClick={() => setFsZoom((z) => Math.min(1.5, parseFloat((z + 0.1).toFixed(1))))}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              title="Aumentar zoom"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Fit button */}
+          <button
+            onClick={() => setFsZoom(fsViewMode === "mobile" ? 1.0 : 0.65)}
+            className="px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/80 border border-white/10 hover:bg-white/5 transition-colors"
+            title="Redefinir zoom para ajustar"
+          >
+            Ajustar
+          </button>
+
+          <span className="text-xs font-data text-white/20 ml-0.5">
+            {fsViewMode === "mobile" ? `${PHONE_W}px` : `${IFRAME_W}px`}
+          </span>
+
+          <div className="flex-1" />
+
+          <button
+            onClick={() => setFullscreenHtml(null)}
+            className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            title="Fechar (Esc)"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Preview area — click outside email closes */}
+        <div
+          className="flex-1 overflow-auto bg-zinc-800 py-10"
+          onClick={() => setFullscreenHtml(null)}
+        >
+          {/* Scaled email shell */}
+          <div
+            className="mx-auto shadow-2xl rounded-xl overflow-hidden"
+            style={{
+              width: displayedWidth,
+              height: Math.round(fsEmailHeight * iframeScale),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <iframe
+              ref={fsIframeRef}
+              srcDoc={fullscreenHtml}
+              onLoad={handleFsIframeLoad}
+              style={{
+                width: IFRAME_W,
+                height: fsEmailHeight,
+                border: "none",
+                display: "block",
+                transform: `scale(${iframeScale})`,
+                transformOrigin: "top left",
+              }}
+              title="Email preview fullscreen"
+            />
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-4xl h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogTitle className="sr-only">Preview — {template?.name}</DialogTitle>
@@ -383,11 +530,19 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
                   </div>
 
                   {result.html && (previewTab === "html" || !result.text) ? (
-                    <div
-                      className="flex-1 bg-white rounded-xl overflow-auto shadow-inner"
-                      style={{ minHeight: "320px" }}
-                      dangerouslySetInnerHTML={{ __html: result.html }}
-                    />
+                    <div className="flex-1 relative" style={{ minHeight: "320px" }}>
+                      <div
+                        className="absolute inset-0 bg-white rounded-xl overflow-auto shadow-inner"
+                        dangerouslySetInnerHTML={{ __html: result.html }}
+                      />
+                      <button
+                        onClick={() => setFullscreenHtml(result.html!)}
+                        className="absolute bottom-2 right-2 z-10 p-1.5 rounded-md bg-black/25 hover:bg-black/50 text-white/80 hover:text-white transition-all shadow-sm"
+                        title="Ver em tela cheia"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ) : (
                     <pre className="flex-1 px-4 py-4 bg-white/[0.03] border border-border/60 rounded-xl text-xs font-data text-foreground whitespace-pre-wrap leading-relaxed overflow-auto" style={{ minHeight: "200px" }}>
                       {result.text ?? result.body}
@@ -411,6 +566,7 @@ function ApiPreviewModal({ open, onClose, template }: ApiPreviewModalProps) {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 
@@ -1015,7 +1171,11 @@ export default function TemplatesPage() {
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="flex flex-col flex-1 min-h-0">
+
+      {/* ── Sticky header: title + channel filter ── */}
+      <div className="shrink-0 px-8 pt-8 pb-4 bg-background border-b border-border/30">
+
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
@@ -1058,6 +1218,11 @@ export default function TemplatesPage() {
             </button>
           ))}
         </div>
+
+      </div>{/* end sticky header */}
+
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-8 py-5">
 
         {/* Loading */}
         {isLoading && (
@@ -1167,7 +1332,9 @@ export default function TemplatesPage() {
           })}
         </div>
         )}
-      </div>
+
+      </div>{/* end scrollable */}
+    </div>{/* end flex col */}
 
       <TemplateModal
         open={modalOpen}

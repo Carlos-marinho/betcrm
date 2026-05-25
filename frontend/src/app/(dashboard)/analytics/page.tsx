@@ -60,7 +60,8 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 overflow-y-auto">
+    <div className="p-8 space-y-6">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="font-display font-bold text-2xl">Análises</h1>
@@ -259,5 +260,6 @@ export default function AnalyticsPage() {
           )}
         </div>
       </div>
+    </div>
   );
 }

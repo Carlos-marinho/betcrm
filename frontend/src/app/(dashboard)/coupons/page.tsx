@@ -226,9 +226,9 @@ export default function CouponsPage() {
   const reused = coupons.filter((c) => c.has_been_sent).length;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="flex flex-col flex-1 min-h-0 bg-[#09090b] text-white">
       {/* ── Header ── */}
-      <div className="border-b border-zinc-800/60 bg-[#09090b]/95 backdrop-blur sticky top-0 z-10">
+      <div className="shrink-0 border-b border-zinc-800/60 bg-[#09090b]/95 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center">
@@ -263,7 +263,8 @@ export default function CouponsPage() {
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-6xl mx-auto px-6 py-8">
 
         {/* Skeleton */}
@@ -416,6 +417,7 @@ export default function CouponsPage() {
             <span className="text-zinc-300">sem reiniciar servidor</span>.
           </p>
         </div>
+      </div>
       </div>
 
       {/* ── Create / Edit Dialog ── */}
