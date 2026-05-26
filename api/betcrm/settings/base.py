@@ -203,6 +203,7 @@ QUIET_HOURS_START = env.int("QUIET_HOURS_START", default=23)
 QUIET_HOURS_END = env.int("QUIET_HOURS_END", default=8)
 
 # ---------- BRAND / URLS PÚBLICAS ----------
+BRAND_NAME = env("BRAND_NAME", default="MARCA")
 PUBLIC_SITE_URL = env("PUBLIC_SITE_URL", default="https://yourdomain.com")
 DEPOSIT_URL = env("DEPOSIT_URL", default="https://yourdomain.com/depositar")
 SUPPORT_URL = env("SUPPORT_URL", default="https://yourdomain.com/suporte")
