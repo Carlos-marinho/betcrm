@@ -18,8 +18,6 @@ services:
       - ./api:/app  # hot reload
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-    ports:
-      - "8000:8000"
 
   celery_worker:
     command: >
@@ -51,9 +49,11 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    ports:
-      - "3000:3000"
 
   nginx:
     profiles:
       - donotstart  # nginx não roda em dev
+
+volumes:
+  static_volume:
+  media_volume:
