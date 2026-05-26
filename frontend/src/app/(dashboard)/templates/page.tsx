@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -787,6 +787,320 @@ function AbTestModal({ open, onClose, currentTemplate }: AbTestModalProps) {
   );
 }
 
+// ── Emoji Picker ──────────────────────────────────────────────────────────────
+
+type EmojiEntry = { e: string; k: string; c: string };
+
+const EMOJI_DATA: EmojiEntry[] = [
+  // Expressões
+  { e: "😀", k: "sorriso feliz alegre animado", c: "exp" },
+  { e: "😃", k: "sorriso feliz animado", c: "exp" },
+  { e: "😄", k: "sorriso alegre feliz", c: "exp" },
+  { e: "😁", k: "sorriso rindo dentes", c: "exp" },
+  { e: "😆", k: "rindo gargalhando alegre", c: "exp" },
+  { e: "😅", k: "alívio suado nervoso", c: "exp" },
+  { e: "🤣", k: "rindo muito engraçado", c: "exp" },
+  { e: "😂", k: "rindo chorando engraçado", c: "exp" },
+  { e: "🙂", k: "sorriso leve tranquilo", c: "exp" },
+  { e: "😉", k: "piscando piada cúmplice", c: "exp" },
+  { e: "😊", k: "sorriso carinhoso feliz", c: "exp" },
+  { e: "😇", k: "anjo inocente bom", c: "exp" },
+  { e: "🥰", k: "amor carinho coração apaixonado", c: "exp" },
+  { e: "😍", k: "apaixonado amor coração", c: "exp" },
+  { e: "🤩", k: "estrelas animado incrível uau", c: "exp" },
+  { e: "😎", k: "legal descolado óculos", c: "exp" },
+  { e: "🤑", k: "dinheiro rico cobiçoso", c: "exp" },
+  { e: "😏", k: "esperto malicioso", c: "exp" },
+  { e: "🥺", k: "triste fofo coitado", c: "exp" },
+  { e: "😭", k: "chorando muito triste", c: "exp" },
+  { e: "😤", k: "irritado bravo vapor", c: "exp" },
+  { e: "🤯", k: "chocado cabeça explodindo incrível uau", c: "exp" },
+  { e: "😱", k: "assustado surpreso chocado", c: "exp" },
+  { e: "🥳", k: "festa celebrando parabéns animado", c: "exp" },
+  { e: "🤗", k: "abraço carinhoso acolhedor", c: "exp" },
+  { e: "🤔", k: "pensando dúvida refletindo", c: "exp" },
+  { e: "🫡", k: "salutando respeitando ok", c: "exp" },
+  { e: "🔥", k: "fogo quente incrível viral hot", c: "exp" },
+  { e: "😘", k: "beijo amor carinhoso", c: "exp" },
+  { e: "🥴", k: "tonto confuso cabeça rodando", c: "exp" },
+  // Símbolos
+  { e: "✅", k: "ok sim correto aprovado check certo", c: "sym" },
+  { e: "❌", k: "errado não negado cancelado", c: "sym" },
+  { e: "⚠️", k: "atenção aviso alerta cuidado", c: "sym" },
+  { e: "📌", k: "pino importante fixado", c: "sym" },
+  { e: "🔔", k: "sino notificação alerta aviso", c: "sym" },
+  { e: "📢", k: "alto falante anúncio aviso novo", c: "sym" },
+  { e: "💯", k: "cem perfeito aprovado nota máximo", c: "sym" },
+  { e: "➡️", k: "seta direita próximo avançar", c: "sym" },
+  { e: "✨", k: "brilho estrelas especial mágico novo", c: "sym" },
+  { e: "🆕", k: "novo novidade lançamento", c: "sym" },
+  { e: "🆓", k: "grátis gratuito free", c: "sym" },
+  { e: "💥", k: "explosão boom impacto destaque", c: "sym" },
+  { e: "⭐", k: "estrela favorito especial destaque", c: "sym" },
+  { e: "🌟", k: "estrela brilhante destaque especial", c: "sym" },
+  { e: "💫", k: "estrela girando brilho especial", c: "sym" },
+  { e: "❗", k: "atenção exclamação alerta importante", c: "sym" },
+  { e: "❓", k: "dúvida pergunta questão", c: "sym" },
+  { e: "📣", k: "megafone anúncio destaque", c: "sym" },
+  { e: "💡", k: "ideia luz lâmpada dica", c: "sym" },
+  { e: "🎯", k: "alvo acerto certeiro foco", c: "sym" },
+  { e: "🎉", k: "festa celebração confete parabéns", c: "sym" },
+  { e: "🎊", k: "festa celebração parabéns", c: "sym" },
+  { e: "🎁", k: "presente brinde promoção gift", c: "sym" },
+  { e: "🎀", k: "laço presente bônus especial", c: "sym" },
+  { e: "🏆", k: "troféu campeão vencedor primeiro", c: "sym" },
+  { e: "🥇", k: "primeiro medalha ouro vencedor", c: "sym" },
+  { e: "🎖️", k: "medalha honra prêmio distinção", c: "sym" },
+  { e: "🏅", k: "medalha esporte prêmio", c: "sym" },
+  // Dinheiro
+  { e: "💰", k: "dinheiro grana saco rico fortuna", c: "mon" },
+  { e: "💵", k: "dólar dinheiro nota bill", c: "mon" },
+  { e: "💶", k: "euro dinheiro nota", c: "mon" },
+  { e: "💸", k: "dinheiro voando gastando reward", c: "mon" },
+  { e: "💳", k: "cartão crédito débito pagamento", c: "mon" },
+  { e: "💹", k: "gráfico alta lucro crescimento", c: "mon" },
+  { e: "📈", k: "gráfico crescimento alta lucro", c: "mon" },
+  { e: "💎", k: "diamante precioso valor VIP premium", c: "mon" },
+  { e: "🪙", k: "moeda coin token", c: "mon" },
+  { e: "🎰", k: "caça-níqueis cassino jogo slot", c: "mon" },
+  { e: "🏧", k: "caixa eletrônico ATM saque banco", c: "mon" },
+  { e: "🤑", k: "rico dinheiro millionaire", c: "mon" },
+  { e: "🏦", k: "banco financeiro instituição", c: "mon" },
+  { e: "💲", k: "dólar símbolo dinheiro", c: "mon" },
+  { e: "📊", k: "gráfico barras análise dados", c: "mon" },
+  { e: "🤝", k: "acordo parceria negócio deal", c: "mon" },
+  // Esporte & Jogo
+  { e: "🎮", k: "videogame controle jogo gaming", c: "spt" },
+  { e: "🎲", k: "dado sorte jogo cassino", c: "spt" },
+  { e: "🃏", k: "carta baralho jogo pôquer", c: "spt" },
+  { e: "⚽", k: "futebol bola esporte soccer", c: "spt" },
+  { e: "🏀", k: "basquete bola esporte basket", c: "spt" },
+  { e: "🏈", k: "futebol americano bola esporte", c: "spt" },
+  { e: "⚾", k: "baseball bola esporte beisebol", c: "spt" },
+  { e: "🎾", k: "tênis bola esporte", c: "spt" },
+  { e: "🥊", k: "boxe luva luta esporte", c: "spt" },
+  { e: "🏋️", k: "musculação academia força levantamento", c: "spt" },
+  { e: "🏄", k: "surfe ondas esporte aquático", c: "spt" },
+  { e: "🏇", k: "corrida cavalo hipismo esporte", c: "spt" },
+  { e: "🎱", k: "bilhar bola 8 jogo snooker", c: "spt" },
+  { e: "🏹", k: "arco flecha tiro esporte", c: "spt" },
+  { e: "🥋", k: "artes marciais karatê judo esporte", c: "spt" },
+  { e: "🏊", k: "natação nadar água esporte", c: "spt" },
+  // Gestos
+  { e: "👋", k: "olá tchau mão oi aceno saudação", c: "ges" },
+  { e: "👍", k: "aprovado curtiu ótimo certo legal positivo", c: "ges" },
+  { e: "👎", k: "reprovado ruim errado negativo", c: "ges" },
+  { e: "👏", k: "palmas aplausos parabéns bravo", c: "ges" },
+  { e: "🙌", k: "celebração mãos para cima vitória", c: "ges" },
+  { e: "🙏", k: "oração por favor obrigado mãos gratidão", c: "ges" },
+  { e: "💪", k: "força poder músculo braço", c: "ges" },
+  { e: "✌️", k: "paz dois vitória V", c: "ges" },
+  { e: "🤞", k: "dedos cruzados sorte esperança", c: "ges" },
+  { e: "👌", k: "ok perfeito ótimo", c: "ges" },
+  { e: "☝️", k: "um primeiro número apontar", c: "ges" },
+  { e: "✊", k: "punho força poder solidariedade", c: "ges" },
+  { e: "🤜", k: "soco punho direita", c: "ges" },
+  { e: "👆", k: "acima cima aponta para cima", c: "ges" },
+  // Corações
+  { e: "❤️", k: "amor coração vermelho love", c: "hrt" },
+  { e: "🧡", k: "coração laranja amizade", c: "hrt" },
+  { e: "💛", k: "coração amarelo feliz", c: "hrt" },
+  { e: "💚", k: "coração verde natureza", c: "hrt" },
+  { e: "💙", k: "coração azul calmo", c: "hrt" },
+  { e: "💜", k: "coração roxo", c: "hrt" },
+  { e: "🤍", k: "coração branco puro", c: "hrt" },
+  { e: "💔", k: "coração partido triste amor", c: "hrt" },
+  { e: "❤️‍🔥", k: "coração fogo paixão amor ardente", c: "hrt" },
+  { e: "💕", k: "dois corações amor casal", c: "hrt" },
+  { e: "💗", k: "coração crescendo amor", c: "hrt" },
+  { e: "💖", k: "coração brilhando especial amor", c: "hrt" },
+  { e: "💘", k: "coração flecha cupido amor", c: "hrt" },
+  { e: "💝", k: "coração presente amor especial", c: "hrt" },
+];
+
+const EMOJI_CATS = [
+  { id: "exp", icon: "😊", label: "Expressões" },
+  { id: "sym", icon: "✨", label: "Símbolos" },
+  { id: "mon", icon: "💰", label: "Dinheiro" },
+  { id: "spt", icon: "🎮", label: "Esporte" },
+  { id: "ges", icon: "👋", label: "Gestos" },
+  { id: "hrt", icon: "❤️", label: "Corações" },
+] as const;
+
+interface EmojiPickerProps {
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+}
+
+function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("exp");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
+    const t = setTimeout(() => searchRef.current?.focus(), 30);
+    return () => clearTimeout(t);
+  }, []);
+
+  const term = search.trim().toLowerCase();
+  const displayed = term
+    ? EMOJI_DATA.filter((d) =>
+        d.k.toLowerCase().includes(term) || d.e.includes(term)
+      )
+    : EMOJI_DATA.filter((d) => d.c === activeCategory);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={(e) => e.preventDefault()}
+      className="absolute z-50 top-full mt-1.5 left-0 w-[272px] bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+    >
+      {/* Search */}
+      <div className="p-2 border-b border-border/60">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar emoji..."
+            className="w-full pl-8 pr-7 py-1.5 text-sm bg-white/5 border border-border rounded-lg text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-gold/40 transition-colors"
+          />
+          {search && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground/50 hover:text-foreground"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Category tabs */}
+      {!term && (
+        <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border/40 bg-white/[0.01]">
+          {EMOJI_CATS.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setActiveCategory(cat.id)}
+              title={cat.label}
+              className={`w-8 h-8 flex items-center justify-center rounded-md text-base shrink-0 transition-all ${
+                activeCategory === cat.id
+                  ? "bg-gold/10 border border-gold/20"
+                  : "hover:bg-white/5"
+              }`}
+            >
+              {cat.icon}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Emoji grid */}
+      <div className="p-1.5 grid grid-cols-8 gap-0.5 max-h-[168px] overflow-y-auto">
+        {displayed.length === 0 ? (
+          <div className="col-span-8 py-6 text-center text-xs text-muted-foreground">
+            Nenhum emoji encontrado
+          </div>
+        ) : (
+          displayed.map((entry, i) => (
+            <button
+              key={`${entry.e}-${i}`}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onSelect(entry.e)}
+              title={entry.k.split(" ")[0]}
+              className="w-8 h-8 flex items-center justify-center text-xl rounded-md hover:bg-white/10 active:scale-90 transition-all"
+            >
+              {entry.e}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Resizable Textarea ────────────────────────────────────────────────────────
+
+const ResizableTextarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className, style, ...props }, ref) => {
+  const [height, setHeight] = useState(120);
+  const dragging = useRef(false);
+  const startY = useRef(0);
+  const startH = useRef(0);
+
+  function onHandleMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragging.current = true;
+    startY.current = e.clientY;
+    startH.current = height;
+
+    function onMove(ev: MouseEvent) {
+      if (!dragging.current) return;
+      setHeight(Math.max(80, startH.current + (ev.clientY - startY.current)));
+    }
+    function onUp() {
+      dragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  return (
+    <div className="flex flex-col">
+      <Textarea
+        ref={ref}
+        className={`${className ?? ""} resize-none rounded-b-none border-b-0`}
+        style={{ ...style, height }}
+        {...props}
+      />
+      <div
+        onMouseDown={onHandleMouseDown}
+        title="Arraste para redimensionar"
+        className="flex items-center justify-center h-6 bg-white/[0.03] border border-border rounded-b-md cursor-ns-resize hover:bg-white/10 active:bg-white/15 transition-colors select-none group"
+      >
+        <div className="flex items-center gap-[3px]">
+          {[0,1,2,3,4,5].map((i) => (
+            <span
+              key={i}
+              className="w-[3px] h-[3px] rounded-full bg-muted-foreground/30 group-hover:bg-muted-foreground/60 transition-colors"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+ResizableTextarea.displayName = "ResizableTextarea";
+
 // ── Create / Edit Template Modal ──────────────────────────────────────────────
 
 interface TemplateModalProps {
@@ -802,6 +1116,8 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
   const [previewTab, setPreviewTab] = useState("form");
   const [assetLibOpen, setAssetLibOpen] = useState(false);
   const [selectedBanner, setSelectedBanner] = useState<EmailAsset | null>(null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const subjectInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     register, handleSubmit, control, setValue, watch, reset,
@@ -856,7 +1172,18 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
   }
 
   function insertVar(v: string) {
-    setValue("text_body", (watch("text_body") || "") + v);
+    const ta = bodyInputRef.current;
+    const current = watch("text_body") || "";
+    const pos = ta ? (ta.selectionStart ?? current.length) : current.length;
+    const newVal = current.slice(0, pos) + v + current.slice(pos);
+    setValue("text_body", newVal, { shouldDirty: true });
+    requestAnimationFrame(() => {
+      if (ta) {
+        ta.focus();
+        const newPos = pos + v.length;
+        ta.setSelectionRange(newPos, newPos);
+      }
+    });
   }
 
   async function onSubmit(values: TemplateForm) {
@@ -890,7 +1217,27 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
     reset();
     setPreviewTab("form");
     setSelectedBanner(null);
+    setEmojiPickerOpen(false);
     onClose();
+  }
+
+  const { ref: subjectRHFRef, ...subjectField } = register("subject");
+  const { ref: bodyRHFRef, ...bodyField } = register("text_body");
+  const bodyInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function insertEmoji(emoji: string) {
+    const input = subjectInputRef.current;
+    const current = watch("subject") || "";
+    const pos = input ? (input.selectionStart ?? current.length) : current.length;
+    const newVal = current.slice(0, pos) + emoji + current.slice(pos);
+    setValue("subject", newVal, { shouldDirty: true });
+    requestAnimationFrame(() => {
+      if (input) {
+        input.focus();
+        const newPos = pos + [...emoji].length;
+        input.setSelectionRange(newPos, newPos);
+      }
+    });
   }
 
   return (
@@ -961,11 +1308,33 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
               {watchChannel === "email" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="tpl-subject">Assunto</Label>
-                  <Input
-                    id="tpl-subject"
-                    placeholder={`Olá {{ profile.first_name }}, seu depósito foi confirmado!`}
-                    {...register("subject")}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="tpl-subject"
+                      placeholder={`Olá {{ profile.first_name }}, seu depósito foi confirmado!`}
+                      className="pr-9"
+                      ref={(el) => {
+                        subjectRHFRef(el);
+                        subjectInputRef.current = el;
+                      }}
+                      {...subjectField}
+                    />
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setEmojiPickerOpen((v) => !v)}
+                      title="Inserir emoji no assunto"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-lg leading-none hover:scale-110 transition-transform select-none"
+                    >
+                      🙂
+                    </button>
+                    {emojiPickerOpen && (
+                      <EmojiPicker
+                        onSelect={insertEmoji}
+                        onClose={() => setEmojiPickerOpen(false)}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1046,7 +1415,11 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
                   id="tpl-body"
                   rows={5}
                   placeholder={`Olá {{ profile.first_name }},\n\nSeu depósito de R$ {{ event.amount }} foi confirmado!`}
-                  {...register("text_body")}
+                  ref={(el) => {
+                    bodyRHFRef(el);
+                    bodyInputRef.current = el;
+                  }}
+                  {...bodyField}
                 />
                 {errors.text_body && <p className="text-xs text-destructive">{errors.text_body.message}</p>}
               </div>
@@ -1056,9 +1429,8 @@ function TemplateModal({ open, onClose, template }: TemplateModalProps) {
                   <Label htmlFor="tpl-html">
                     HTML <span className="normal-case text-muted-foreground/60">(opcional)</span>
                   </Label>
-                  <Textarea
+                  <ResizableTextarea
                     id="tpl-html"
-                    rows={4}
                     className="font-data text-xs"
                     placeholder="<html>...</html>"
                     {...register("html_body")}
