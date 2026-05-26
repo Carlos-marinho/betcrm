@@ -2,51 +2,73 @@
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Vamos resolver</title></head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-<tr><td align="center" style="padding:40px 20px;">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#111111;border-radius:20px;overflow:hidden;border:1px solid #1e1e1e;">
 
-<tr><td align="center" style="padding:40px 40px 20px;background:linear-gradient(135deg,#FF6B35 0%,#C73E1D 100%);">
-  <p style="margin:0;font-size:48px;">🔧</p>
-  <h1 style="margin:16px 0 0;color:#fff;font-size:24px;font-weight:700;">Vamos resolver isso juntos</h1>
-</td></tr>
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
 
-<tr><td style="padding:40px;">
-  <p style="margin:0 0 24px;color:#fff;font-size:16px;line-height:1.5;">
-    Olá {{ first_name }}, seu depósito de <strong style="color:#FFD700;">{{ amount|brl }}</strong> não foi processado.
-  </p>
-  <p style="margin:0 0 16px;color:#ccc;font-size:15px;font-weight:600;">Tente uma dessas soluções:</p>
-
-  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:12px;border-left:3px solid #FFD700;">
-    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">1. CARTÃO RECUSADO</p>
-    <p style="margin:0;color:#ccc;font-size:14px;">Tente outro método ou PIX (mais rápido)</p>
-  </div>
-  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:12px;border-left:3px solid #FFD700;">
-    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">2. LIMITE EXCEDIDO</p>
-    <p style="margin:0;color:#ccc;font-size:14px;">Ajuste no app do seu banco e tente novamente</p>
-  </div>
-  <div style="background:#252525;border-radius:8px;padding:16px;margin-bottom:24px;border-left:3px solid #FFD700;">
-    <p style="margin:0 0 4px;color:#FFD700;font-size:13px;font-weight:600;">3. PIX EXPIROU</p>
-    <p style="margin:0;color:#ccc;font-size:14px;">Gere um novo código de pagamento</p>
-  </div>
-
-  <div style="text-align:center;">
-    <a href="{{ deposit_url }}" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
-      TENTAR DE NOVO
+  <!-- logo / marca -->
+  <tr><td align="center" style="padding:28px 40px 20px;background-color:#0d0d0d;">
+    {%- if brand_logo_url %}
+    <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
+      <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" height="36" style="display:inline-block;height:36px;width:auto;max-width:220px;border:0;">
     </a>
-  </div>
-</td></tr>
+    {%- else %}
+    <span style="font-size:18px;font-weight:900;letter-spacing:4px;color:#FFD700;text-transform:uppercase;">{{ brand_name }}</span>
+    {%- endif %}
+  </td></tr>
 
-<tr><td align="center" style="padding:24px 40px;border-top:1px solid #2a2a2a;background:#0f0f0f;">
-  <p style="margin:0 0 12px;color:#fff;font-size:15px;">Quer falar com alguém? Resposta em menos de 2 min:</p>
-  <a href="{{ support_url }}" style="display:inline-block;margin:0 6px;padding:12px 24px;background:#252525;color:#FFD700;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">💬 CHAT</a>
-  <a href="{{ site_url }}/whatsapp" style="display:inline-block;margin:0 6px;padding:12px 24px;background:#25D366;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">📱 WHATSAPP</a>
-</td></tr>
+  <!-- banner -->
+  <tr><td style="padding:0;line-height:0;font-size:0;">
+    {%- if banner_url %}<img src="{{ banner_url }}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">{%- endif %}
+  </td></tr>
 
-<tr><td align="center" style="padding:30px 40px;">
-  <p style="margin:0;color:#666;font-size:11px;">⚠️ Jogue com responsabilidade. +18.<br>
-  <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a></p>
-</td></tr>
+  <tr><td align="center" style="padding:36px 48px 10px;">
+    <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;text-align:center;line-height:1.2;">Às vezes os bancos complicam. A gente resolve. 🔧</h1>
+  </td></tr>
+  <tr><td align="center" style="padding:12px 48px 28px;">
+    <p style="margin:0;color:#999;font-size:15px;line-height:1.65;text-align:center;">Olá {{ first_name }}, seu depósito de <strong style="color:#FFD700;">{{ amount|brl }}</strong> não foi processado. Existe uma solução simples:</p>
+  </td></tr>
+
+  <!-- bullets: soluções -->
+  <tr><td style="padding:0 40px 28px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#141414;border-radius:12px;border:1px solid #1e1e1e;">
+      <tr><td style="padding:14px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+          <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">1️⃣</td>
+          <td style="font-size:14px;color:#cccccc;"><strong style="color:#FFD700;">Cartão recusado</strong> &mdash; tente outro método ou PIX (mais rápido)</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:14px 20px;border-top:1px solid #1d1d1d;">
+        <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+          <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">2️⃣</td>
+          <td style="font-size:14px;color:#cccccc;"><strong style="color:#FFD700;">Limite excedido</strong> &mdash; ajuste no app do seu banco e tente novamente</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:14px 20px;border-top:1px solid #1d1d1d;">
+        <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+          <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">3️⃣</td>
+          <td style="font-size:14px;color:#cccccc;"><strong style="color:#FFD700;">PIX expirou</strong> &mdash; gere um novo código de pagamento</td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td align="center" style="padding:4px 40px 28px;">
+    <a href="{{ deposit_url }}" style="display:inline-block;padding:17px 52px;background:linear-gradient(135deg,#FFD700,#FF8C00);color:#000;text-decoration:none;font-weight:800;font-size:13px;border-radius:10px;letter-spacing:2px;text-transform:uppercase;">Tentar de Novo</a>
+  </td></tr>
+  <tr><td align="center" style="padding:0 40px 32px;">
+    <a href="{{ support_url }}" style="font-size:13px;color:#888;text-decoration:underline;">Prefiro falar com o suporte</a>
+  </td></tr>
+
+  <tr><td style="padding:0 40px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="height:1px;background:linear-gradient(90deg,transparent,#222,transparent);font-size:0;">&nbsp;</td></tr></table></td></tr>
+  <tr><td style="padding:20px 40px 24px;text-align:center;">
+    <p style="margin:0 0 6px;font-size:11px;color:#3d3d3d;"><a href="{{ unsubscribe_url }}" style="color:#3d3d3d;text-decoration:underline;">Cancelar emails promocionais</a></p>
+    <p style="margin:0;font-size:10px;color:#2a2a2a;">Jogo responsável: jogue com moderação. +18.</p>
+  </td></tr>
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#3a2b00,#FFD700,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
 
 </table>
 </td></tr>

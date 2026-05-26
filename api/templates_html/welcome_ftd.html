@@ -2,67 +2,109 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Bem-vindo</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
-  <tr><td align="center" style="padding:40px 20px;">
-    <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);border-radius:16px;overflow:hidden;border:1px solid #2a2a2a;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#111111;border-radius:20px;overflow:hidden;border:1px solid #1e1e1e;">
 
-      <tr><td align="center" style="padding:40px 20px 20px;">
-        <h1 style="margin:0;color:#FFD700;font-size:28px;font-weight:800;letter-spacing:1px;">[SUA MARCA]</h1>
+      <!-- top accent -->
+      <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
+
+      <!-- logo / marca: imagem se brand_logo_url disponível, senão texto -->
+      <tr><td align="center" style="padding:28px 40px 20px;background-color:#0d0d0d;">
+        {%- if brand_logo_url %}
+        <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
+          <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" height="36"
+            style="display:inline-block;height:36px;width:auto;max-width:220px;border:0;">
+        </a>
+        {%- else %}
+        <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:18px;font-weight:900;letter-spacing:4px;color:#FFD700;text-transform:uppercase;">{{ brand_name }}</span>
+        {%- endif %}
       </td></tr>
 
-      <tr><td align="center" style="padding:20px 40px;">
-        <h2 style="margin:0 0 16px;color:#fff;font-size:32px;font-weight:700;line-height:1.2;">
+      <!-- banner: vinculado via painel → TemplateService injeta banner_url -->
+      <tr><td style="padding:0;line-height:0;font-size:0;">
+        {%- if banner_url %}
+        <img src="{{ banner_url }}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+        {%- endif %}
+      </td></tr>
+
+      <tr><td align="center" style="padding:36px 48px 10px;">
+        <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;line-height:1.2;text-align:center;">
           Bem-vindo, {{ first_name }}. 🎰
-        </h2>
-        <p style="margin:0;color:#b0b0b0;font-size:16px;line-height:1.5;">
+        </h1>
+      </td></tr>
+
+      <tr><td align="center" style="padding:12px 48px 28px;">
+        <p style="margin:0;color:#999999;font-size:15px;line-height:1.65;text-align:center;">
           Sua conta está pronta. Agora é só ativar seu bônus de boas-vindas e começar a jogar.
         </p>
       </td></tr>
 
-      <tr><td align="center" style="padding:30px 40px;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#FFD700 0%,#FFA500 100%);border-radius:12px;">
-          <tr><td align="center" style="padding:30px 20px;">
-            <p style="margin:0 0 8px;color:#000;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Seu Bônus de Boas-Vindas</p>
-            <p style="margin:0 0 8px;color:#000;font-size:42px;font-weight:900;">100%</p>
-            <p style="margin:0;color:#000;font-size:16px;font-weight:600;">até R$ 500 + 50 rodadas grátis</p>
+      <!-- highlight: bônus -->
+      <tr><td style="padding:0 40px 32px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#1a1400,#2b1f00);border-radius:14px;border:1px solid #3a2b00;overflow:hidden;">
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
+          <tr><td align="center" style="padding:28px 24px;">
+            <p style="margin:0 0 6px;color:#886e00;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;">Seu Bônus de Boas-Vindas</p>
+            <p style="margin:0;color:#FFD700;font-size:48px;font-weight:900;line-height:1;">100%</p>
+            <p style="margin:8px 0 0;color:#b8920a;font-size:14px;font-weight:600;">até R$ 500 + 50 rodadas grátis</p>
+          </td></tr>
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
+        </table>
+      </td></tr>
+
+      <!-- bullets -->
+      <tr><td style="padding:0 40px 28px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#141414;border-radius:12px;border:1px solid #1e1e1e;">
+          <tr><td style="padding:14px 20px;">
+            <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+              <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">⚡</td>
+              <td style="font-size:14px;color:#cccccc;"><strong style="color:#fff;">Saque PIX em até 30 minutos</strong></td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding:14px 20px;border-top:1px solid #1d1d1d;">
+            <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+              <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">🎰</td>
+              <td style="font-size:14px;color:#cccccc;"><strong style="color:#fff;">+2.000 slots, Aviator, Fortune Tiger e cassino ao vivo</strong></td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding:14px 20px;border-top:1px solid #1d1d1d;">
+            <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+              <td style="width:30px;font-size:16px;vertical-align:top;padding-top:1px;">💬</td>
+              <td style="font-size:14px;color:#cccccc;"><strong style="color:#fff;">Suporte 24/7 em português</strong></td>
+            </tr></table>
           </td></tr>
         </table>
       </td></tr>
 
-      <tr><td align="center" style="padding:10px 40px 30px;">
-        <a href="{{ deposit_url }}" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;text-transform:uppercase;letter-spacing:1px;">
+      <!-- CTA -->
+      <tr><td align="center" style="padding:4px 40px 32px;">
+        <a href="{{ deposit_url }}" style="display:inline-block;padding:17px 52px;background:linear-gradient(135deg,#FFD700,#FF8C00);color:#000;text-decoration:none;font-weight:800;font-size:13px;border-radius:10px;letter-spacing:2px;text-transform:uppercase;">
           Fazer Primeiro Depósito
         </a>
       </td></tr>
 
-      <tr><td style="padding:20px 40px;">
+      <!-- divider -->
+      <tr><td style="padding:0 40px;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr><td style="padding:12px 0;border-top:1px solid #2a2a2a;">
-            <p style="margin:0;color:#fff;font-size:15px;">⚡ <strong>Saque PIX em até 30 minutos</strong></p>
-          </td></tr>
-          <tr><td style="padding:12px 0;border-top:1px solid #2a2a2a;">
-            <p style="margin:0;color:#fff;font-size:15px;">🎰 <strong>+2.000 slots, Aviator, Fortune Tiger e cassino ao vivo</strong></p>
-          </td></tr>
-          <tr><td style="padding:12px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a;">
-            <p style="margin:0;color:#fff;font-size:15px;">💬 <strong>Suporte 24/7 em português</strong></p>
-          </td></tr>
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#222,transparent);font-size:0;">&nbsp;</td></tr>
         </table>
       </td></tr>
 
-      <tr><td align="center" style="padding:30px 40px 40px;">
-        <p style="margin:0 0 12px;color:#666;font-size:12px;line-height:1.5;">
-          Você recebeu este email porque criou conta em [Sua Marca].<br>
-          <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a> | <a href="{{ support_url }}" style="color:#888;">Suporte</a>
+      <!-- footer -->
+      <tr><td style="padding:20px 40px 24px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:11px;color:#3d3d3d;">
+          <a href="{{ unsubscribe_url }}" style="color:#3d3d3d;text-decoration:underline;">Cancelar emails promocionais</a>
         </p>
-        <p style="margin:16px 0 0;color:#555;font-size:11px;">
-          ⚠️ Jogue com responsabilidade. Proibido para menores de 18 anos.<br>
-          Em caso de jogo problemático, ligue 0800-XXX-XXXX.
-        </p>
+        <p style="margin:0;font-size:10px;color:#2a2a2a;">Jogo responsável: jogue com moderação. +18.</p>
       </td></tr>
+
+      <!-- bottom accent -->
+      <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#3a2b00,#FFD700,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
 
     </table>
   </td></tr>

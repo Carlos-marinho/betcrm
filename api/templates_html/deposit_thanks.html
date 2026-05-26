@@ -2,71 +2,109 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Saldo liberado</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
-<tr><td align="center" style="padding:40px 20px;">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#111111;border-radius:20px;overflow:hidden;border:1px solid #1e1e1e;">
 
-<tr><td align="center" style="padding:40px 20px 30px;background:linear-gradient(135deg,#00C853 0%,#009624 100%);">
-  <p style="margin:0;color:#fff;font-size:60px;">🎉</p>
-  <h1 style="margin:16px 0 0;color:#fff;font-size:28px;font-weight:800;">Saldo liberado!</h1>
-</td></tr>
+  <!-- top accent -->
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
 
-<tr><td align="center" style="padding:40px 40px 20px;">
-  <p style="margin:0 0 12px;color:#b0b0b0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Saldo Total Disponível</p>
-  <p style="margin:0;color:#FFD700;font-size:48px;font-weight:900;">{{ saldo_total|brl }}</p>
-  <p style="margin:12px 0 0;color:#888;font-size:14px;">
-    Depósito: {{ amount|brl }} + Bônus: {{ bonus_amount|brl }}
-  </p>
-</td></tr>
+  <!-- logo / marca -->
+  <tr><td align="center" style="padding:28px 40px 20px;background-color:#0d0d0d;">
+    {%- if brand_logo_url %}
+    <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
+      <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" height="36"
+        style="display:inline-block;height:36px;width:auto;max-width:220px;border:0;">
+    </a>
+    {%- else %}
+    <span style="font-size:18px;font-weight:900;letter-spacing:4px;color:#FFD700;text-transform:uppercase;">{{ brand_name }}</span>
+    {%- endif %}
+  </td></tr>
 
-<tr><td align="center" style="padding:20px 40px 30px;">
-  <a href="{{ site_url }}/jogar" style="display:inline-block;padding:18px 48px;background:#FFD700;color:#000;text-decoration:none;font-weight:700;font-size:16px;border-radius:8px;">
-    COMEÇAR A JOGAR
-  </a>
-</td></tr>
+  <!-- banner -->
+  <tr><td style="padding:0;line-height:0;font-size:0;">
+    {%- if banner_url %}
+    <img src="{{ banner_url }}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+    {%- endif %}
+  </td></tr>
 
-<tr><td style="padding:20px 40px;">
-  <p style="margin:0 0 20px;color:#fff;font-size:18px;font-weight:600;">Onde quer começar?</p>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-    <tr>
-      <td width="33%" align="center" style="padding:12px;">
-        <a href="{{ site_url }}/aviator" style="text-decoration:none;">
-          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
-            <p style="margin:0 0 8px;font-size:32px;">✈️</p>
-            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Aviator</p>
-          </div>
-        </a>
-      </td>
-      <td width="33%" align="center" style="padding:12px;">
-        <a href="{{ site_url }}/fortune-tiger" style="text-decoration:none;">
-          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
-            <p style="margin:0 0 8px;font-size:32px;">🐯</p>
-            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Fortune Tiger</p>
-          </div>
-        </a>
-      </td>
-      <td width="33%" align="center" style="padding:12px;">
-        <a href="{{ site_url }}/ao-vivo" style="text-decoration:none;">
-          <div style="background:#252525;border-radius:12px;padding:20px 10px;border:1px solid #333;">
-            <p style="margin:0 0 8px;font-size:32px;">🎲</p>
-            <p style="margin:0;color:#fff;font-size:14px;font-weight:600;">Ao Vivo</p>
-          </div>
-        </a>
-      </td>
-    </tr>
-  </table>
-</td></tr>
+  <!-- headline -->
+  <tr><td align="center" style="padding:36px 48px 10px;">
+    <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;text-align:center;line-height:1.2;">Saldo liberado! 🎉</h1>
+  </td></tr>
 
-<tr><td align="center" style="padding:30px 40px 40px;">
-  <p style="margin:0;color:#666;font-size:12px;">
-    ⚠️ Jogue com responsabilidade. +18.<br>
-    <a href="{{ unsubscribe_url }}" style="color:#888;">Cancelar inscrição</a>
-  </p>
-</td></tr>
+  <tr><td align="center" style="padding:12px 48px 28px;">
+    <p style="margin:0;color:#999;font-size:15px;line-height:1.65;text-align:center;">Seu depósito foi confirmado. Agora é hora de jogar.</p>
+  </td></tr>
+
+  <!-- highlight: saldo -->
+  <tr><td style="padding:0 40px 32px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#1a1400,#2b1f00);border-radius:14px;border:1px solid #3a2b00;overflow:hidden;">
+      <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
+      <tr><td align="center" style="padding:28px 24px;">
+        <p style="margin:0 0 6px;color:#886e00;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;">Saldo Total Disponível</p>
+        <p style="margin:0;color:#FFD700;font-size:48px;font-weight:900;line-height:1;">{{ saldo_total|brl }}</p>
+        <p style="margin:8px 0 0;color:#b8920a;font-size:14px;font-weight:600;">Depósito: {{ amount|brl }} + Bônus: {{ bonus_amount|brl }}</p>
+      </td></tr>
+      <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
+    </table>
+  </td></tr>
+
+  <!-- game cards -->
+  <tr><td style="padding:0 40px 28px;">
+    <p style="margin:0 0 16px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#555;">Onde quer começar?</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td width="33%" style="padding:0 5px 0 0;vertical-align:top;">
+          <a href="{{ site_url }}/jogos/aviator" style="text-decoration:none;display:block;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+              <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:36px;line-height:1;">✈️</p></td></tr>
+              <tr><td style="padding:10px 10px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">Aviator</p><p style="margin:0;font-size:10px;color:#555;text-align:center;">Crash game</p></td></tr>
+            </table>
+          </a>
+        </td>
+        <td width="33%" style="padding:0 2px 0 3px;vertical-align:top;">
+          <a href="{{ site_url }}/jogos/fortune-tiger" style="text-decoration:none;display:block;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+              <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:36px;line-height:1;">🐯</p></td></tr>
+              <tr><td style="padding:10px 10px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">Fortune Tiger</p><p style="margin:0;font-size:10px;color:#555;text-align:center;">Slot</p></td></tr>
+            </table>
+          </a>
+        </td>
+        <td width="33%" style="padding:0 0 0 5px;vertical-align:top;">
+          <a href="{{ site_url }}/jogos/live" style="text-decoration:none;display:block;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+              <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:36px;line-height:1;">🎲</p></td></tr>
+              <tr><td style="padding:10px 10px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">Ao Vivo</p><p style="margin:0;font-size:10px;color:#555;text-align:center;">Dealer real</p></td></tr>
+            </table>
+          </a>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td align="center" style="padding:4px 40px 32px;">
+    <a href="{{ site_url }}/jogar" style="display:inline-block;padding:17px 52px;background:linear-gradient(135deg,#FFD700,#FF8C00);color:#000;text-decoration:none;font-weight:800;font-size:13px;border-radius:10px;letter-spacing:2px;text-transform:uppercase;">
+      Começar a Jogar
+    </a>
+  </td></tr>
+
+  <!-- divider -->
+  <tr><td style="padding:0 40px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="height:1px;background:linear-gradient(90deg,transparent,#222,transparent);font-size:0;">&nbsp;</td></tr></table></td></tr>
+
+  <!-- footer -->
+  <tr><td style="padding:20px 40px 24px;text-align:center;">
+    <p style="margin:0 0 6px;font-size:11px;color:#3d3d3d;">
+      <a href="{{ unsubscribe_url }}" style="color:#3d3d3d;text-decoration:underline;">Cancelar emails promocionais</a>
+    </p>
+    <p style="margin:0;font-size:10px;color:#2a2a2a;">Jogo responsável: jogue com moderação. +18.</p>
+  </td></tr>
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#3a2b00,#FFD700,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
 
 </table>
 </td></tr>
