@@ -202,7 +202,7 @@ export default function EventsPage() {
           </div>
 
           {/* Column headers */}
-          <div className="flex items-center gap-4 px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+          <div className="flex items-center gap-4 -mx-8 px-8 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
             <span className="w-52">Evento</span>
             <span className="w-28">Usuário</span>
             <span className="w-28">Valor</span>
@@ -215,9 +215,9 @@ export default function EventsPage() {
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="divide-y divide-border/50">
             {isLoading && (
-              <div className="space-y-1.5 p-4">
+              <div className="space-y-1.5 px-8 py-4">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 px-0 py-1.5">
+                  <div key={i} className="flex items-center gap-4 py-1.5">
                     <Skeleton className="h-5 w-44" />
                     <Skeleton className="h-4 w-20" />
                     <Skeleton className="h-4 w-16" />
@@ -228,7 +228,7 @@ export default function EventsPage() {
             )}
 
             {!isLoading && events.length === 0 && (
-              <div className="px-4 py-16 text-center">
+              <div className="px-8 py-16 text-center">
                 <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
                   {activeFilterCount > 0
@@ -248,7 +248,7 @@ export default function EventsPage() {
                 <button
                   key={ev.id}
                   onClick={() => setSelectedEventId(ev.id)}
-                  className={`w-full flex items-center gap-4 px-4 py-3 transition-all animate-fade-up text-left group ${
+                  className={`w-full flex items-center gap-4 px-8 py-3 transition-all animate-fade-up text-left group ${
                     selectedEventId === ev.id
                       ? "bg-teal/[0.04] border-l-2 border-teal"
                       : "hover:bg-white/[0.025] border-l-2 border-transparent"

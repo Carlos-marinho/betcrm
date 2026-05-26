@@ -22,13 +22,13 @@ import { useEffect } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/analytics", label: "Análises", icon: BarChart3 },
   { href: "/profiles", label: "Perfis", icon: Users },
   { href: "/segments", label: "Segmentos", icon: Filter },
   { href: "/coupons", label: "Cupons", icon: Ticket },
   { href: "/flows", label: "Fluxos", icon: Workflow },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/messages", label: "Mensagens", icon: MessageSquare },
-  { href: "/analytics", label: "Análises", icon: BarChart3 },
   { href: "/events", label: "Eventos", icon: Zap },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];

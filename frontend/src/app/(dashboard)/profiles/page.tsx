@@ -298,7 +298,7 @@ export default function ProfilesPage() {
         </div>
 
         {/* Column headers */}
-        <div className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+        <div className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] -mx-8 px-8 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
           <div>Usuário</div>
           <div>ID externo</div>
           <div>Tipo</div>
@@ -314,7 +314,7 @@ export default function ProfilesPage() {
         <div className="divide-y divide-border/50">
           {isLoading &&
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] px-4 py-3">
+              <div key={i} className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] px-8 py-3">
                 <div><Skeleton className="h-4 w-36" /></div>
                 <div><Skeleton className="h-4 w-20" /></div>
                 <div><Skeleton className="h-4 w-14" /></div>
@@ -329,7 +329,7 @@ export default function ProfilesPage() {
             data?.results.map((p) => (
               <div
                 key={p.id}
-                className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                className="grid grid-cols-[minmax(160px,1fr)_110px_75px_90px_75px_130px_36px] px-8 py-3 hover:bg-white/[0.02] transition-colors"
               >
                 {/* Usuário */}
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -338,12 +338,12 @@ export default function ProfilesPage() {
                       {(p.first_name?.[0] ?? p.email?.[0] ?? "?").toUpperCase()}
                     </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground leading-tight truncate text-sm">
+                  <Link href={`/profiles/${p.id}`} className="min-w-0 group/name">
+                    <p className="font-medium text-foreground leading-tight truncate text-sm group-hover/name:text-gold transition-colors">
                       {p.first_name || "—"}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 truncate">{p.email}</p>
-                  </div>
+                    <p className="text-xs text-muted-foreground/70 truncate group-hover/name:text-muted-foreground transition-colors">{p.email}</p>
+                  </Link>
                 </div>
 
                 {/* ID externo */}
@@ -398,7 +398,7 @@ export default function ProfilesPage() {
             ))}
 
           {!isLoading && data?.results.length === 0 && (
-            <div className="px-4 py-12 text-center text-muted-foreground text-sm">
+            <div className="px-8 py-12 text-center text-muted-foreground text-sm">
               {activeFilterCount > 0 || debouncedSearch
                 ? "Nenhum perfil encontrado com estes filtros."
                 : "Nenhum perfil encontrado."}
@@ -408,7 +408,7 @@ export default function ProfilesPage() {
 
         {/* Pagination */}
         {data && data.count > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+          <div className="flex items-center justify-between px-8 py-3 border-t border-border/50">
             <p className="text-xs text-muted-foreground font-data">
               Página {page} de {totalPages} · {data.count.toLocaleString("pt-BR")} total
             </p>
