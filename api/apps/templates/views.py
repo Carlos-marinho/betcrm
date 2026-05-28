@@ -1,5 +1,8 @@
 """Views do templates."""
 
+import imghdr
+import os
+
 from django.db.models import BooleanField, Case, Exists, OuterRef, Value, When
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
@@ -7,6 +10,43 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from .models import AbTest, AbTestVariant, CampaignCoupon, EmailAsset, MessageTemplate
+
+_ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+_ALLOWED_IMAGE_MIMETYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+}
+
+
+def _validate_image_file(file) -> None:
+    """Rejeita qualquer upload que não seja imagem (extensão + magic bytes)."""
+    ext = os.path.splitext(file.name)[1].lower()
+    if ext not in _ALLOWED_IMAGE_EXTENSIONS:
+        raise serializers.ValidationError(
+            f"Tipo de arquivo não permitido: '{ext}'. Permitidos: {', '.join(sorted(_ALLOWED_IMAGE_EXTENSIONS))}"
+        )
+
+    content_type = getattr(file, "content_type", "")
+    if content_type and content_type not in _ALLOWED_IMAGE_MIMETYPES:
+        raise serializers.ValidationError(
+            f"Content-Type não permitido: '{content_type}'."
+        )
+
+    # Verifica magic bytes para SVG e formatos binários
+    if ext == ".svg":
+        chunk = file.read(512)
+        file.seek(0)
+        if b"<script" in chunk.lower() or b"javascript" in chunk.lower():
+            raise serializers.ValidationError("SVG com conteúdo JavaScript não é permitido.")
+    else:
+        chunk = file.read(512)
+        file.seek(0)
+        detected = imghdr.what(None, h=chunk)
+        if detected is None:
+            raise serializers.ValidationError("Arquivo não reconhecido como imagem válida.")
 
 
 # ── Asset serializer / viewset ─────────────────────────────────────────────────
@@ -25,6 +65,10 @@ class EmailAssetSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.file.url)
         return obj.file.url
+
+    def validate_file(self, value):
+        _validate_image_file(value)
+        return value
 
 
 class EmailAssetViewSet(viewsets.ModelViewSet):

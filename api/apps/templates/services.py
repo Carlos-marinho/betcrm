@@ -283,27 +283,35 @@ class TemplateService:
     def _build_unsubscribe_url(cls, profile) -> str:
         """Constrói URL única de unsubscribe para o profile."""
         import hashlib
+        from urllib.parse import quote
 
-        # Token determinístico (mesmo que isso = mesmo unsub link sempre)
         token = hashlib.sha256(
             f"{profile.external_id}{settings.SECRET_KEY}".encode()
         ).hexdigest()[:32]
 
         base = settings.DEFAULT_UNSUBSCRIBE_URL if hasattr(settings, "DEFAULT_UNSUBSCRIBE_URL") else "https://yourdomain.com/unsubscribe"
-        return f"{base}?token={token}&id={profile.external_id}"
+        # quote() garante que external_id com caracteres especiais não quebre URL ou HTML
+        safe_id = quote(str(profile.external_id), safe="")
+        return f"{base}?token={token}&id={safe_id}"
 
     @classmethod
     def _inject_unsubscribe_footer(cls, html: str, unsub_url: str, footer_logo_url: str = "") -> str:
         """Injeta footer de unsubscribe com logo opcional."""
+        from html import escape
+
+        # escape() previne HTML injection via URLs ou paths com caracteres especiais
+        safe_url = escape(unsub_url, quote=True)
+        safe_logo = escape(footer_logo_url, quote=True)
+
         logo_block = (
-            f'<img src="{footer_logo_url}" alt="Logo" style="max-height:32px; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;" />'
-            if footer_logo_url
+            f'<img src="{safe_logo}" alt="Logo" style="max-height:32px; margin-bottom:8px; display:block; margin-left:auto; margin-right:auto;" />'
+            if safe_logo
             else ""
         )
         footer = f"""
 <div style="text-align:center; padding:24px 20px 16px; font-size:11px; color:#888; border-top:1px solid #e5e5e5; margin-top:24px;">
     {logo_block}
-    <a href="{unsub_url}" style="color:#aaa; text-decoration:underline;">Cancelar inscrição</a>
+    <a href="{safe_url}" style="color:#aaa; text-decoration:underline;">Cancelar inscrição</a>
     &nbsp;·&nbsp; Jogue com responsabilidade. +18.
 </div>
 """
