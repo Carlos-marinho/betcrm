@@ -50,10 +50,12 @@ def _E(  # noqa: N802
     ) if preheader else ""
 
     # ── Logo / Marca (dinâmico via context em runtime) ────────────────────────
-    # Usa imagem se brand_logo_url estiver disponível, senão texto em dourado.
+    # Quando há banner, ele carrega a identidade visual — logo/texto é redundante.
+    # Sem banner: mostra imagem de logo se disponível, senão nome em texto dourado.
     # ACCENT_PLACEHOLDER é trocado por {accent} via .replace() abaixo.
     logo_html = """\
-      <!-- logo / marca: imagem ou texto conforme asset "logo" no painel -->
+      {%- if not banner_url %}
+      <!-- logo / marca: exibido apenas quando não há banner -->
       <tr><td align="center" style="padding:28px 40px 20px;background-color:#0d0d0d;">
         {%- if brand_logo_url %}
         <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
@@ -63,7 +65,8 @@ def _E(  # noqa: N802
         {%- else %}
         <span style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:18px;font-weight:900;letter-spacing:4px;color:ACCENT_PLACEHOLDER;text-transform:uppercase;">{{ brand_name }}</span>
         {%- endif %}
-      </td></tr>""".replace("ACCENT_PLACEHOLDER", accent)
+      </td></tr>
+      {%- endif %}""".replace("ACCENT_PLACEHOLDER", accent)
 
     # ── Banner (vinculado via painel → TemplateService injeta banner_url) ─────
     banner_html = """\
@@ -291,6 +294,14 @@ body{{margin:0!important;padding:0!important;background-color:#080808}}
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#222,transparent);font-size:0;">&nbsp;</td></tr>
         </table>
+      </td></tr>
+
+      <!-- footer image (asset is_global_footer=True, injetado em runtime) -->
+      <tr><td style="padding:0;line-height:0;font-size:0;">
+        {{%- if footer_logo_url %}}
+        <img src="{{{{ footer_logo_url }}}}" width="600" alt="" class="fluid"
+          style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+        {{%- endif %}}
       </td></tr>
 
       <!-- footer -->
