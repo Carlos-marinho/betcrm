@@ -234,29 +234,43 @@ class TemplateService:
     @classmethod
     def _build_asset_context(cls, template: MessageTemplate) -> dict:
         """
-        Monta URLs de assets e dados de marca para injeção no contexto Jinja2.
+        Monta URLs absolutas de assets para injeção no contexto Jinja2.
 
         Variáveis injetadas:
           banner_url      — asset vinculado a este template específico
           footer_logo_url — asset global do rodapé (is_global_footer=True)
           brand_logo_url  — logo da marca (asset_type="logo", mais recente ativo)
           brand_name      — nome da marca (env BRAND_NAME)
+
+        URLs são sempre absolutas usando MEDIA_BASE_URL (ex: https://api.yourdomain.com).
+        Isso é obrigatório para que clientes de email consigam carregar as imagens e
+        para que o preview do frontend funcione (o iframe resolve relativo ao frontend,
+        não à API).
         """
         from .models import EmailAsset
 
+        media_base = getattr(settings, "MEDIA_BASE_URL", "").rstrip("/")
+
+        def _abs(relative: str) -> str:
+            if not relative:
+                return ""
+            if relative.startswith(("http://", "https://")):
+                return relative
+            return f"{media_base}{relative}"
+
         banner_url = ""
         if template.banner_asset_id and template.banner_asset and template.banner_asset.file:
-            banner_url = template.banner_asset.file.url
+            banner_url = _abs(template.banner_asset.file.url)
 
         global_footer = EmailAsset.objects.filter(is_global_footer=True, is_active=True).first()
-        footer_logo_url = global_footer.file.url if global_footer and global_footer.file else ""
+        footer_logo_url = _abs(global_footer.file.url if global_footer and global_footer.file else "")
 
         brand_logo = (
             EmailAsset.objects.filter(asset_type="logo", is_active=True)
             .order_by("-created_at")
             .first()
         )
-        brand_logo_url = brand_logo.file.url if brand_logo and brand_logo.file else ""
+        brand_logo_url = _abs(brand_logo.file.url if brand_logo and brand_logo.file else "")
 
         return {
             "banner_url": banner_url,

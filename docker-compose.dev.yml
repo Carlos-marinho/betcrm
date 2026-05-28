@@ -14,6 +14,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: betcrm.settings.dev
       DJANGO_DEBUG: "True"
+      MEDIA_BASE_URL: "http://localhost:8000"
     volumes:
       - ./api:/app  # hot reload
       - static_volume:/app/staticfiles
