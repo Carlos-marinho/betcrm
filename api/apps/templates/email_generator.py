@@ -49,14 +49,24 @@ def _E(  # noqa: N802
         f'&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>'
     ) if preheader else ""
 
-    # ── Logo / Marca (dinâmico via context em runtime) ────────────────────────
-    # Quando há banner, ele carrega a identidade visual — logo/texto é redundante.
-    # Sem banner: mostra imagem de logo se disponível, senão nome em texto dourado.
+    # ── Banner (vinculado via painel → TemplateService injeta banner_url) ─────
+    # Banner sempre primeiro: full-bleed, sem padding, colado ao topo do card.
+    banner_html = """\
+      <!-- banner: substituído automaticamente ao vincular asset no painel -->
+      <tr><td style="padding:0;line-height:0;font-size:0;">
+        {%- if banner_url %}
+        <img src="{{ banner_url }}" width="600" alt="" class="fluid"
+          style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+        {%- endif %}
+      </td></tr>"""
+
+    # ── Logo / Marca (somente quando não há banner) ───────────────────────────
+    # Quando há banner, ele já carrega a identidade visual — logo/texto é redundante.
     # ACCENT_PLACEHOLDER é trocado por {accent} via .replace() abaixo.
     logo_html = """\
       {%- if not banner_url %}
       <!-- logo / marca: exibido apenas quando não há banner -->
-      <tr><td align="center" style="padding:28px 40px 20px;background-color:#0d0d0d;">
+      <tr><td align="center" style="padding:16px 32px 14px;background-color:#0d0d0d;">
         {%- if brand_logo_url %}
         <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
           <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" height="36"
@@ -67,16 +77,6 @@ def _E(  # noqa: N802
         {%- endif %}
       </td></tr>
       {%- endif %}""".replace("ACCENT_PLACEHOLDER", accent)
-
-    # ── Banner (vinculado via painel → TemplateService injeta banner_url) ─────
-    banner_html = """\
-      <!-- banner: substituído automaticamente ao vincular asset no painel -->
-      <tr><td style="padding:0;line-height:0;font-size:0;">
-        {%- if banner_url %}
-        <img src="{{ banner_url }}" width="600" alt="" class="fluid"
-          style="display:block;width:100%;max-width:600px;height:auto;border:0;">
-        {%- endif %}
-      </td></tr>"""
 
     # ── Highlight box ─────────────────────────────────────────────────────────
     highlight_html = ""
@@ -260,17 +260,17 @@ body{{margin:0!important;padding:0!important;background-color:#080808}}
 {preheader_html}
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
   style="background-color:#080808;">
-<tr><td align="center" style="padding:32px 16px;">
+<tr><td align="center" style="padding:0;">
 
-  <table role="presentation" class="w600" width="600" cellspacing="0" cellpadding="0"
+  <table role="presentation" class="w600" width="100%" cellspacing="0" cellpadding="0"
     style="max-width:600px;width:100%;background-color:#111111;border-radius:20px;overflow:hidden;border:1px solid #1e1e1e;">
 
       <!-- top accent line -->
       <tr><td style="height:3px;background:linear-gradient(90deg,transparent,{accent},transparent);font-size:0;">&nbsp;</td></tr>
 
-      {logo_html}
-
       {banner_html}
+
+      {logo_html}
 
       <!-- headline -->
       <tr><td class="pad" style="padding:36px 48px 10px;">
