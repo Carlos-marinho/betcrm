@@ -175,7 +175,8 @@ def record_link_click(self, tracked_link_id: int):
     Atualiza os contadores do link e propaga o sinal para o MessageLog:
     seta clicked_at (idempotente) e avança o status para "clicked" quando aplicável.
     """
-    from django.db.models import F
+    from django.db.models import F, Value
+    from django.db.models.functions import Coalesce
 
     from .models import MessageLog, TrackedLink
 
@@ -187,15 +188,8 @@ def record_link_click(self, tracked_link_id: int):
 
     now = timezone.now()
     try:
-        # Contadores do link (incremento atômico). first_clicked_at só no 1º clique.
-        TrackedLink.objects.filter(id=link.id).update(
-            click_count=F("click_count") + 1,
-            last_clicked_at=now,
-        )
-        TrackedLink.objects.filter(id=link.id, first_clicked_at__isnull=True).update(
-            first_clicked_at=now
-        )
-
+        # 1) Propagação idempotente para o MessageLog primeiro: rodar 2x não muda
+        #    o resultado (clicked_at só é setado se None; status só avança).
         log = link.message_log
         update_fields: list[str] = []
         if log.clicked_at is None:
@@ -207,13 +201,22 @@ def record_link_click(self, tracked_link_id: int):
         if update_fields:
             log.save(update_fields=update_fields)
 
-        logger.info(
-            "Link click: link=%s flow=%s channel=%s log=%s",
-            link.id, link.flow_code, link.channel, log.id,
+        # 2) Incremento não-idempotente por último, num único UPDATE atômico.
+        #    first_clicked_at via Coalesce (mantém o 1º valor). Nada depois dele
+        #    pode lançar e forçar um retry que recontaria o clique.
+        TrackedLink.objects.filter(id=link.id).update(
+            click_count=F("click_count") + 1,
+            last_clicked_at=now,
+            first_clicked_at=Coalesce("first_clicked_at", Value(now)),
         )
     except Exception as exc:
         logger.exception("record_link_click falhou para link=%s", tracked_link_id)
         raise self.retry(exc=exc)
+
+    logger.info(
+        "Link click: link=%s flow=%s channel=%s log=%s",
+        link.id, link.flow_code, link.channel, log.id,
+    )
 
 
 # Import scheduled tasks

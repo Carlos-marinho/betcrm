@@ -29,6 +29,9 @@ _SLUG_BYTES = 9  # ~12 chars base64url → slug curto e colisão desprezível
 # Detecta URLs http(s) dentro de um texto livre (corpo do SMS).
 _URL_RE = re.compile(r"https?://[^\s\"'<>]+")
 
+# Pontuação que costuma encerrar a frase logo após o link e não faz parte dele.
+_TRAILING_PUNCT = ".,;:!?)]}'\""
+
 
 def _new_slug() -> str:
     """Gera um slug curto e único para o short-link."""
@@ -97,7 +100,16 @@ def wrap_links(
 
     # 2) URLs no corpo de texto livre
     if body:
-        body = _URL_RE.sub(lambda m: _track(m.group(0), "body"), body)
+        def _sub(m: re.Match) -> str:
+            raw = m.group(0)
+            # Não engolir pontuação que encerra a frase (ex: "...x." → destino "x").
+            trailing = ""
+            while raw and raw[-1] in _TRAILING_PUNCT:
+                trailing = raw[-1] + trailing
+                raw = raw[:-1]
+            return _track(raw, "body") + trailing
+
+        body = _URL_RE.sub(_sub, body)
 
     return data, body
 

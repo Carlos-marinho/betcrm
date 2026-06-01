@@ -217,6 +217,12 @@ def track_click(request, slug: str):
     Registra o clique de forma assíncrona e redireciona (302) ao destino real
     o mais rápido possível. Não exige autenticação — é acessado pelo usuário
     final ao clicar no link da mensagem.
+
+    Bots de preview de link e scanners (WhatsApp, redes sociais, antivírus de
+    e-mail, crawlers) pré-buscam o short-link e inflariam as métricas. O Nginx
+    do subdomínio trk classifica o User-Agent e sinaliza via header
+    `X-Link-Preview: 1`; nesses casos redirecionamos normalmente, mas NÃO
+    contabilizamos o clique.
     """
     from .models import TrackedLink
 
@@ -228,6 +234,10 @@ def track_click(request, slug: str):
     if not destination.startswith(("http://", "https://")):
         # Defesa contra open-redirect — só geramos http(s), mas validamos mesmo assim.
         return HttpResponse(status=400)
+
+    if request.META.get("HTTP_X_LINK_PREVIEW") == "1":
+        # Pré-busca de bot/preview: redireciona sem contar o clique.
+        return HttpResponseRedirect(destination)
 
     from .tasks import record_link_click
     try:

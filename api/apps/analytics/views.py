@@ -134,6 +134,15 @@ def _rate(num: int, den: int) -> float:
     return round(num / den * 100, 1) if den else 0.0
 
 
+def _click_rate(clicked: int, delivered: int, sent: int) -> float:
+    """
+    Taxa de clique sobre a base disponível: usa `delivered` quando há recibo de
+    entrega (email/Mailgun) e cai para `sent` quando o canal não confirma entrega
+    (SMS/WhatsApp via webhook). Sem o fallback, SMS mostraria 0% mesmo com cliques.
+    """
+    return _rate(clicked, delivered or sent)
+
+
 # Status considerados "enviados de fato" (saíram do queue/rejected/failed).
 _SENT_STATUSES = ["sent", "delivered", "opened", "clicked"]
 
@@ -185,11 +194,13 @@ def flow_messages(request, flow_id: int):
             "failed": row["failed"],
             "delivery_rate": _rate(row["delivered"], row["sent"]),
             "open_rate": _rate(row["opened"], row["delivered"]),
-            "click_rate": _rate(row["clicked"], row["delivered"]),
+            "click_rate": _click_rate(row["clicked"], row["delivered"], row["sent"]),
         })
 
-    exec_total = flow.executions.count() or 1
-    goal_reached = flow.executions.filter(state="goal_reached").count()
+    # Mesma fonte/fórmula do card da listagem (FlowCardMetrics) e do contador
+    # mantido em flows.tasks: reached/enrolled. Evita 3 cálculos divergentes.
+    enrolled = flow.total_enrolled
+    goal_reached = flow.total_goal_reached
 
     return Response({
         "flow": {"id": flow.id, "name": flow.name, "code": flow.code},
@@ -197,13 +208,13 @@ def flow_messages(request, flow_id: int):
             **totals,
             "delivery_rate": _rate(totals["delivered"], totals["sent"]),
             "open_rate": _rate(totals["opened"], totals["delivered"]),
-            "click_rate": _rate(totals["clicked"], totals["delivered"]),
+            "click_rate": _click_rate(totals["clicked"], totals["delivered"], totals["sent"]),
         },
         "by_channel": by_channel,
         "goal": {
             "reached": goal_reached,
-            "enrolled": flow.total_enrolled,
-            "goal_rate": _rate(goal_reached, exec_total),
+            "enrolled": enrolled,
+            "goal_rate": _rate(goal_reached, enrolled),
         },
     })
 
@@ -239,7 +250,7 @@ def flows_summary(request):
             "opened": row["opened"],
             "clicked": row["clicked"],
             "open_rate": _rate(row["opened"], row["delivered"]),
-            "click_rate": _rate(row["clicked"], row["delivered"]),
+            "click_rate": _click_rate(row["clicked"], row["delivered"], row["sent"]),
         }
 
     return Response({"flows": summary})

@@ -1,5 +1,7 @@
 """Testes do link tracking de cliques (SMS e canais sem tracking de provider)."""
 
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -60,6 +62,19 @@ class WrapLinksTests(TestCase):
         )
         self.assertEqual(data, {"bonus_code": "ABC", "ltv": "100.00"})
         self.assertEqual(TrackedLink.objects.count(), 0)
+
+    def test_trailing_punctuation_not_part_of_destination(self):
+        url = "https://betnice.net/x"
+        _, body = wrap_links(
+            data={},
+            body=f"Deposite em {url}.",  # ponto encerra a frase, não a URL
+            log=self.log,
+            flow_code="welcome_flow",
+        )
+
+        link = TrackedLink.objects.get(message_log=self.log)
+        self.assertEqual(link.destination_url, url)  # sem o ponto final
+        self.assertTrue(body.endswith(f"/r/{link.slug}."))  # ponto preservado no texto
 
 
 class RecordClickTests(TestCase):
@@ -122,3 +137,19 @@ class TrackClickViewTests(TestCase):
     def test_unknown_slug_returns_404(self):
         resp = self.client.get(reverse("track-click", args=["nope"]))
         self.assertEqual(resp.status_code, 404)
+
+    def test_link_preview_bot_redirects_without_recording(self):
+        with patch("apps.messaging.tasks.record_link_click.delay") as enqueue:
+            resp = self.client.get(
+                reverse("track-click", args=["redir1"]),
+                HTTP_X_LINK_PREVIEW="1",
+            )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "https://betnice.net/destino")
+        enqueue.assert_not_called()
+
+    def test_human_click_records(self):
+        with patch("apps.messaging.tasks.record_link_click.delay") as enqueue:
+            resp = self.client.get(reverse("track-click", args=["redir1"]))
+        self.assertEqual(resp.status_code, 302)
+        enqueue.assert_called_once_with(self.link.id)
