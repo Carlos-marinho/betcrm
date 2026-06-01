@@ -6,8 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments,
-  useFlowScheduleRuns,
-  type Flow, type ScheduleConfig,
+  useFlowScheduleRuns, useFlowsSummary,
+  type Flow, type ScheduleConfig, type FlowSummaryEntry,
 } from "@/lib/hooks";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Workflow, Play, Pause, Plus, Pencil, Activity, CheckCircle2,
   XCircle, AlertTriangle, Clock, Zap, LayoutGrid, CalendarClock, Users, Calendar,
+  Send, MailOpen, MousePointerClick, Target,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -755,8 +756,49 @@ function ScheduleLastRun({ flow }: { flow: Flow }) {
 
 // ── FlowsPage ─────────────────────────────────────────────────────────────────
 
+// Métricas compactas exibidas em cada card da listagem.
+function FlowCardMetrics({
+  flow,
+  summary,
+}: {
+  flow: Flow;
+  summary?: FlowSummaryEntry;
+}) {
+  const goalRate =
+    flow.total_enrolled > 0
+      ? Math.round((flow.total_goal_reached / flow.total_enrolled) * 1000) / 10
+      : 0;
+
+  const items = [
+    { icon: Send, label: "envios", value: summary?.sent ?? 0, tone: "text-white/60" },
+    { icon: MailOpen, label: "abertura", value: `${summary?.open_rate ?? 0}%`, tone: "text-sky-400/80" },
+    { icon: MousePointerClick, label: "clique", value: `${summary?.click_rate ?? 0}%`, tone: "text-teal" },
+    { icon: Target, label: "meta", value: `${goalRate}%`, tone: "text-gold" },
+  ];
+
+  return (
+    <div className="hidden md:flex items-center gap-4 shrink-0 pr-2">
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <div key={it.label} className="flex flex-col items-end">
+            <span className={`flex items-center gap-1 font-data text-sm ${it.tone}`}>
+              <Icon className="w-3 h-3 opacity-70" />
+              {typeof it.value === "number" ? it.value.toLocaleString("pt-BR") : it.value}
+            </span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              {it.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function FlowsPage() {
   const { data, isLoading } = useFlows();
+  const { data: flowSummary } = useFlowsSummary();
   const toggle = useToggleFlow();
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Flow | null>(null);
@@ -899,6 +941,8 @@ export default function FlowsPage() {
                           </span>
                         </div>
                       </div>
+
+                      <FlowCardMetrics flow={flow} summary={flowSummary?.[flow.code]} />
 
                       <div className="flex items-center gap-2 shrink-0">
                         <button

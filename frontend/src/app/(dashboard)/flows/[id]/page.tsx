@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { FlowCanvas } from "@/components/features/flow-canvas/canvas";
 import { NodeConfigPanel } from "@/components/features/flow-canvas/node-config-panel";
+import { FlowMetricsPanel } from "@/components/features/flows/flow-metrics-panel";
 import {
   canvasToDefinition,
   definitionToCanvas,
@@ -78,6 +80,7 @@ export default function FlowEditorPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [rightOpen, setRightOpen] = useState(true);
+  const [metricsOpen, setMetricsOpen] = useState(false);
 
   useEffect(() => {
     if (!flow) return;
@@ -227,6 +230,14 @@ export default function FlowEditorPage() {
         </span>
 
         <button
+          onClick={() => setMetricsOpen(true)}
+          className="flex h-7 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-white/70 transition-all hover:bg-white/10 hover:text-white/90"
+        >
+          <BarChart3 className="h-3 w-3" />
+          Métricas
+        </button>
+
+        <button
           onClick={handleToggle}
           disabled={toggleMutation.isPending}
           className={`flex h-7 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-all disabled:opacity-50 ${
@@ -316,6 +327,10 @@ export default function FlowEditorPage() {
         <div className="flex-1" />
         <span className="text-[10px] text-white/15">BetCRM Flow Editor</span>
       </footer>
+
+      {metricsOpen && validFlowId && (
+        <FlowMetricsPanel flowId={validFlowId} onClose={() => setMetricsOpen(false)} />
+      )}
     </div>
   );
 }

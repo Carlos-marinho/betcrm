@@ -321,6 +321,70 @@ export function useFlowExecutions(params?: { state?: string; flow?: number }) {
   });
 }
 
+// ── Flow Analytics (métricas de mensagens por fluxo/canal) ─────────────────────
+
+export interface FlowChannelMetrics {
+  channel: "email" | "sms" | "push" | "whatsapp";
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  rejected: number;
+  failed: number;
+  delivery_rate: number;
+  open_rate: number;
+  click_rate: number;
+}
+
+export interface FlowMessageMetrics {
+  flow: { id: number; name: string; code: string };
+  totals: {
+    sent: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    rejected: number;
+    failed: number;
+    delivery_rate: number;
+    open_rate: number;
+    click_rate: number;
+  };
+  by_channel: FlowChannelMetrics[];
+  goal: { reached: number; enrolled: number; goal_rate: number };
+}
+
+export function useFlowMessages(flowId: number | null) {
+  return useQuery<FlowMessageMetrics>({
+    queryKey: ["flows", flowId, "messages"],
+    queryFn: async () => {
+      const { data } = await api.get(`/analytics/flows/${flowId}/messages`);
+      return data;
+    },
+    enabled: !!flowId,
+    refetchInterval: 30_000,
+  });
+}
+
+export interface FlowSummaryEntry {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  open_rate: number;
+  click_rate: number;
+}
+
+export function useFlowsSummary() {
+  return useQuery<Record<string, FlowSummaryEntry>>({
+    queryKey: ["flows", "summary"],
+    queryFn: async () => {
+      const { data } = await api.get(`/analytics/flows/summary`);
+      return (data?.flows ?? {}) as Record<string, FlowSummaryEntry>;
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 // ── Segment mutations ─────────────────────────────────────────────────────────
 
 export function useCreateSegment() {
