@@ -80,8 +80,16 @@ class Command(BaseCommand):
                         "auth_value": os.environ.get("SMS_WEBHOOK_TOKEN", ""),
                         "payload_template": {
                             "phone": "{{ phone }}",
-                            "message": "{{ message }}",
+                            "template_code": "{{ template_code }}",
                             "external_id": "{{ campaign_id }}",
+                            "data": {
+                                "first_name": "{{ data.first_name }}",
+                                "bonus_code": "{{ data.bonus_code }}",
+                                "deposit_url": "{{ data.deposit_url }}",
+                                "support_url": "{{ data.support_url }}",
+                                "site_url": "{{ data.site_url }}",
+                                "favorite_game": "{{ data.favorite_game }}",
+                            },
                         },
                         "response_path_message_id": "id",
                     },

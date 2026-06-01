@@ -32,8 +32,12 @@ class WebhookSmsProvider(BaseProvider):
             "auth_value": "abc123",               # token, "user:pass" para basic, ou "Header: value"
             "payload_template": {                 # template Jinja2 do JSON a enviar
                 "phone": "{{ phone }}",
-                "message": "{{ message }}",
-                "sender": "{{ sender_id }}"
+                "template_code": "{{ template_code }}",
+                "data": {
+                    "first_name": "{{ data.first_name }}",
+                    "bonus_code": "{{ data.bonus_code }}",
+                    "deposit_url": "{{ data.deposit_url }}"
+                }
             },
             "response_path_message_id": "data.id" # caminho do ID na resposta (dot notation)
         }
@@ -45,6 +49,13 @@ class WebhookSmsProvider(BaseProvider):
         timeout = self.config.get("timeout", 15)
 
         # Monta o payload via template Jinja
+        data = dict(content.data or {})
+        data.update(
+            {
+                "campaign_id": content.campaign_id,
+                "template_code": content.template_code,
+            }
+        )
         payload = self._render_payload(
             {
                 "phone": recipient,
@@ -52,6 +63,8 @@ class WebhookSmsProvider(BaseProvider):
                 "sender_id": self.config.get("sender_id", ""),
                 "campaign_id": content.campaign_id,
                 "template_code": content.template_code,
+                "data": data,
+                **data,
                 **kwargs,
             }
         )
@@ -119,10 +132,13 @@ class WebhookSmsProvider(BaseProvider):
         """Renderiza o template do payload com SandboxedEnvironment (seguro)."""
         template_dict = self.config.get("payload_template")
         if not template_dict:
-            # Default payload
+            # Payload padrão para FluxLab: a mensagem fica no template do FluxLab,
+            # e as variáveis são acessadas como data.first_name, data.bonus_code etc.
             return {
                 "phone": context["phone"],
-                "message": context["message"],
+                "template_code": context["template_code"],
+                "external_id": context["campaign_id"],
+                "data": context["data"],
             }
 
         env = SandboxedEnvironment()

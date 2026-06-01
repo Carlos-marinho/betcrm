@@ -13,6 +13,7 @@ import logging
 import random
 import re
 from decimal import Decimal
+from datetime import date, datetime
 
 from django.conf import settings
 from jinja2 import StrictUndefined
@@ -102,6 +103,7 @@ class TemplateService:
         content = MessageContent(
             template_code=template.code,
             profile_id=profile.id,
+            data=cls._build_provider_data(context),
         )
 
         if channel == "email":
@@ -230,6 +232,44 @@ class TemplateService:
             # Extra (do fluxo / evento) — pode sobrescrever qualquer variável acima
             **_extra,
         }
+
+    @classmethod
+    def _build_provider_data(cls, context: dict) -> dict:
+        """Seleciona variáveis JSON-safe para providers webhook/externos."""
+        allowed_keys = (
+            "first_name",
+            "last_name",
+            "bonus_code",
+            "deposit_url",
+            "support_url",
+            "site_url",
+            "unsubscribe_url",
+            "total_deposits",
+            "deposit_count",
+            "ltv",
+            "favorite_game",
+            "favorite_game_category",
+            "game_session_count",
+        )
+        return {
+            key: cls._json_safe(context.get(key))
+            for key in allowed_keys
+            if context.get(key) not in (None, "")
+        }
+
+    @classmethod
+    def _json_safe(cls, value):
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        if isinstance(value, list):
+            return [cls._json_safe(item) for item in value]
+        if isinstance(value, dict):
+            return {str(k): cls._json_safe(v) for k, v in value.items()}
+        return str(value)
 
     @classmethod
     def _build_asset_context(cls, template: MessageTemplate) -> dict:

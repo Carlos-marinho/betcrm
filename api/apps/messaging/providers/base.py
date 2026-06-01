@@ -33,6 +33,7 @@ class MessageContent:
     campaign_id: str = ""
     template_code: str = ""
     profile_id: int | None = None
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseProvider(ABC):
