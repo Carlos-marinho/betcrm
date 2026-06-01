@@ -12,6 +12,8 @@ from drf_spectacular.views import (
 from rest_framework.permissions import IsAdminUser
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.messaging.views import track_click
+
 api_v1_patterns = [
     path("events/", include("apps.events.urls")),
     path("profiles/", include("apps.profiles.urls")),
@@ -26,6 +28,9 @@ api_v1_patterns = [
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Redirect de rastreamento de cliques (SMS) — fora de /api/ para manter a
+    # URL curta no SMS. Servido também por trk.betnice.net no Nginx.
+    path("r/<slug:slug>", track_click, name="track-click"),
     path("api/v1/", include(api_v1_patterns)),
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

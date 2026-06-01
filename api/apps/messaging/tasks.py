@@ -167,5 +167,54 @@ def send_message_task(
     }
 
 
+@shared_task(time_limit=30, max_retries=3, default_retry_delay=30, bind=True)
+def record_link_click(self, tracked_link_id: int):
+    """
+    Registra um clique em TrackedLink (canais sem tracking de provider, ex: SMS).
+
+    Atualiza os contadores do link e propaga o sinal para o MessageLog:
+    seta clicked_at (idempotente) e avança o status para "clicked" quando aplicável.
+    """
+    from django.db.models import F
+
+    from .models import MessageLog, TrackedLink
+
+    try:
+        link = TrackedLink.objects.select_related("message_log").get(id=tracked_link_id)
+    except TrackedLink.DoesNotExist:
+        logger.warning("record_link_click: TrackedLink %s não existe", tracked_link_id)
+        return
+
+    now = timezone.now()
+    try:
+        # Contadores do link (incremento atômico). first_clicked_at só no 1º clique.
+        TrackedLink.objects.filter(id=link.id).update(
+            click_count=F("click_count") + 1,
+            last_clicked_at=now,
+        )
+        TrackedLink.objects.filter(id=link.id, first_clicked_at__isnull=True).update(
+            first_clicked_at=now
+        )
+
+        log = link.message_log
+        update_fields: list[str] = []
+        if log.clicked_at is None:
+            log.clicked_at = now
+            update_fields.append("clicked_at")
+        if _STATUS_RANK.get("clicked", 4) > _STATUS_RANK.get(log.status, -1):
+            log.status = "clicked"
+            update_fields.append("status")
+        if update_fields:
+            log.save(update_fields=update_fields)
+
+        logger.info(
+            "Link click: link=%s flow=%s channel=%s log=%s",
+            link.id, link.flow_code, link.channel, log.id,
+        )
+    except Exception as exc:
+        logger.exception("record_link_click falhou para link=%s", tracked_link_id)
+        raise self.retry(exc=exc)
+
+
 # Import scheduled tasks
 from .tasks_scheduled import scheduled_reputation_check  # noqa: E402, F401

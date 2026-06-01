@@ -128,3 +128,118 @@ def flow_funnel(request, flow_id: int):
         "goal_rate": round(executions["goal_reached"] / total * 100, 2),
         "completion_rate": round((executions["completed"] + executions["goal_reached"]) / total * 100, 2),
     })
+
+
+def _rate(num: int, den: int) -> float:
+    return round(num / den * 100, 1) if den else 0.0
+
+
+# Status considerados "enviados de fato" (saíram do queue/rejected/failed).
+_SENT_STATUSES = ["sent", "delivered", "opened", "clicked"]
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def flow_messages(request, flow_id: int):
+    """
+    GET /api/v1/analytics/flows/<id>/messages
+
+    Métricas de mensagens por canal para um fluxo: envios, entregas, aberturas,
+    cliques e taxas — atribuídas via MessageLog.campaign_id == flow.code.
+
+    Email: aberturas/cliques vêm do webhook do provider (Mailgun).
+    SMS: cliques vêm do redirect próprio (TrackedLink); não há "abertura".
+    """
+    try:
+        flow = Flow.objects.get(id=flow_id)
+    except Flow.DoesNotExist:
+        return Response({"error": "flow_not_found"}, status=404)
+
+    rows = (
+        MessageLog.objects
+        .filter(campaign_id=flow.code)
+        .values("channel")
+        .annotate(
+            sent=Count("id", filter=Q(status__in=_SENT_STATUSES)),
+            delivered=Count("id", filter=Q(delivered_at__isnull=False)),
+            opened=Count("id", filter=Q(opened_at__isnull=False)),
+            clicked=Count("id", filter=Q(clicked_at__isnull=False)),
+            rejected=Count("id", filter=Q(status="rejected")),
+            failed=Count("id", filter=Q(status__in=["failed", "bounced"])),
+        )
+        .order_by("channel")
+    )
+
+    by_channel = []
+    totals = {"sent": 0, "delivered": 0, "opened": 0, "clicked": 0, "rejected": 0, "failed": 0}
+    for row in rows:
+        for k in totals:
+            totals[k] += row[k]
+        by_channel.append({
+            "channel": row["channel"],
+            "sent": row["sent"],
+            "delivered": row["delivered"],
+            "opened": row["opened"],
+            "clicked": row["clicked"],
+            "rejected": row["rejected"],
+            "failed": row["failed"],
+            "delivery_rate": _rate(row["delivered"], row["sent"]),
+            "open_rate": _rate(row["opened"], row["delivered"]),
+            "click_rate": _rate(row["clicked"], row["delivered"]),
+        })
+
+    exec_total = flow.executions.count() or 1
+    goal_reached = flow.executions.filter(state="goal_reached").count()
+
+    return Response({
+        "flow": {"id": flow.id, "name": flow.name, "code": flow.code},
+        "totals": {
+            **totals,
+            "delivery_rate": _rate(totals["delivered"], totals["sent"]),
+            "open_rate": _rate(totals["opened"], totals["delivered"]),
+            "click_rate": _rate(totals["clicked"], totals["delivered"]),
+        },
+        "by_channel": by_channel,
+        "goal": {
+            "reached": goal_reached,
+            "enrolled": flow.total_enrolled,
+            "goal_rate": _rate(goal_reached, exec_total),
+        },
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def flows_summary(request):
+    """
+    GET /api/v1/analytics/flows/summary
+
+    Rollup de mensagens de TODOS os fluxos numa única query, para os cards da
+    listagem. Retorna um dict indexado por flow.code com envios e taxas.
+    """
+    flow_codes = set(Flow.objects.values_list("code", flat=True))
+
+    rows = (
+        MessageLog.objects
+        .filter(campaign_id__in=flow_codes)
+        .values("campaign_id")
+        .annotate(
+            sent=Count("id", filter=Q(status__in=_SENT_STATUSES)),
+            delivered=Count("id", filter=Q(delivered_at__isnull=False)),
+            opened=Count("id", filter=Q(opened_at__isnull=False)),
+            clicked=Count("id", filter=Q(clicked_at__isnull=False)),
+        )
+    )
+
+    summary = {}
+    for row in rows:
+        summary[row["campaign_id"]] = {
+            "sent": row["sent"],
+            "delivered": row["delivered"],
+            "opened": row["opened"],
+            "clicked": row["clicked"],
+            "open_rate": _rate(row["opened"], row["delivered"]),
+            "click_rate": _rate(row["clicked"], row["delivered"]),
+        }
+
+    return Response({"flows": summary})

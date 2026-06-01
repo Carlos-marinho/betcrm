@@ -133,6 +133,51 @@ class MessageLog(models.Model):
         ]
 
 
+class TrackedLink(models.Model):
+    """
+    Short-link de rastreamento para cliques em canais sem tracking nativo de
+    provider (ex: SMS via webhook/FluxLab).
+
+    Cada link de uma mensagem vira uma instância com `slug` curto. A URL
+    pública (`TRACKING_BASE_URL/r/<slug>`) é enviada no lugar do destino real;
+    ao ser acessada, o redirect registra o clique e atribui ao MessageLog →
+    fluxo/canal. Para email seguimos usando o tracking nativo do provider
+    (Mailgun), então não geramos TrackedLink nesse canal.
+
+    Campos denormalizados (`channel`, `flow_code`, `template_code`) evitam joins
+    em queries de analytics por fluxo/canal.
+    """
+
+    slug = models.CharField(max_length=22, unique=True, db_index=True)
+    message_log = models.ForeignKey(
+        MessageLog, on_delete=models.CASCADE, related_name="tracked_links"
+    )
+
+    channel = models.CharField(max_length=20, db_index=True)
+    flow_code = models.CharField(max_length=100, blank=True, db_index=True)
+    template_code = models.CharField(max_length=100, blank=True)
+    link_key = models.CharField(
+        max_length=50, blank=True, help_text="Origem do link, ex: deposit_url"
+    )
+
+    destination_url = models.URLField(max_length=2000)
+
+    click_count = models.PositiveIntegerField(default=0)
+    first_clicked_at = models.DateTimeField(null=True, blank=True)
+    last_clicked_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["flow_code", "channel"]),
+            models.Index(fields=["message_log", "link_key"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"TrackedLink {self.slug} → {self.destination_url[:50]}"
+
+
 class WebhookEvent(models.Model):
     """
     Trilha de auditoria de cada webhook recebido de um provider.

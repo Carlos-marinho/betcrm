@@ -212,6 +212,13 @@ DEPOSIT_URL = env("DEPOSIT_URL", default="https://yourdomain.com/depositar")
 SUPPORT_URL = env("SUPPORT_URL", default="https://yourdomain.com/suporte")
 DEFAULT_UNSUBSCRIBE_URL = env("UNSUBSCRIBE_URL", default="https://yourdomain.com/unsubscribe")
 
+# ---------- LINK TRACKING (cliques de SMS/canais sem tracking nativo) ----------
+# Domínio dedicado para o redirect de cliques (curto, isolado de cookies do CRM).
+# Em prod: https://trk.betnice.net  | Em dev cai no PUBLIC_SITE_URL.
+TRACKING_BASE_URL = env("TRACKING_BASE_URL", default=PUBLIC_SITE_URL).rstrip("/")
+# Habilita o wrap de links em SMS (e canais sem tracking de provider).
+SMS_LINK_TRACKING_ENABLED = env.bool("SMS_LINK_TRACKING_ENABLED", default=True)
+
 # ---------- WEBHOOK ----------
 WEBHOOK_HMAC_SECRET = env("WEBHOOK_HMAC_SECRET", default="")
 WEBHOOK_ALLOWED_IPS = env.list("WEBHOOK_ALLOWED_IPS", default=[])

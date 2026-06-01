@@ -107,6 +107,15 @@ class MessagingService:
             return SendResult(success=False, error="from_email_not_registered")
 
         # 7. Tenta enviar com fallback
+        # Para canais sem tracking nativo de provider (SMS), preservamos o
+        # conteúdo original e reescrevemos os links por tentativa — cada
+        # MessageLog recebe seus próprios short-links de rastreio.
+        from .tracking import should_track, wrap_links
+
+        track_clicks = should_track(channel)
+        base_data = dict(content.data or {})
+        base_body = content.body
+
         last_result = None
         for provider_config in providers:
             log = self._create_log(
@@ -120,6 +129,14 @@ class MessagingService:
                 flow_execution_id=flow_execution_id,
                 campaign_id=campaign_id,
             )
+
+            if track_clicks:
+                content.data, content.body = wrap_links(
+                    data=base_data,
+                    body=base_body,
+                    log=log,
+                    flow_code=campaign_id,
+                )
 
             try:
                 provider = get_provider(provider_config.provider_class, provider_config.config)

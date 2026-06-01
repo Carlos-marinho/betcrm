@@ -4,7 +4,11 @@ import logging
 from datetime import datetime, time, timedelta
 
 from django.db.models import Count, Q
+from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import (
     api_view,
@@ -200,6 +204,39 @@ def provider_webhook(request, provider_id: int):
     process_webhook_event.delay(event.id)
 
     return Response({"status": "accepted", "event_id": event.id}, status=status.HTTP_200_OK)
+
+
+@never_cache
+@require_GET
+def track_click(request, slug: str):
+    """
+    Redirect de rastreamento de cliques (SMS e canais sem tracking de provider).
+
+    GET /r/<slug>  (servido em trk.betnice.net, fora do prefixo /api/)
+
+    Registra o clique de forma assíncrona e redireciona (302) ao destino real
+    o mais rápido possível. Não exige autenticação — é acessado pelo usuário
+    final ao clicar no link da mensagem.
+    """
+    from .models import TrackedLink
+
+    link = get_object_or_404(
+        TrackedLink.objects.only("id", "destination_url"), slug=slug
+    )
+
+    destination = link.destination_url or ""
+    if not destination.startswith(("http://", "https://")):
+        # Defesa contra open-redirect — só geramos http(s), mas validamos mesmo assim.
+        return HttpResponse(status=400)
+
+    from .tasks import record_link_click
+    try:
+        record_link_click.delay(link.id)
+    except Exception:
+        # Falha no broker não pode quebrar a navegação do usuário.
+        logger.exception("Não foi possível enfileirar record_link_click para %s", link.id)
+
+    return HttpResponseRedirect(destination)
 
 
 @api_view(["GET"])
