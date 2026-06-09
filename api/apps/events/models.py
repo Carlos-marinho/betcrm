@@ -8,7 +8,7 @@ armazena de forma imutável, e dispara processamento async.
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, WorkspaceScopedModel
 
 
 class EventType(TimeStampedModel):
@@ -49,7 +49,7 @@ class EventType(TimeStampedModel):
         return f"{self.code} ({self.get_category_display()})"
 
 
-class Event(models.Model):
+class Event(WorkspaceScopedModel):
     """
     Evento bruto recebido. IMUTÁVEL — nunca atualizar após criação.
 
@@ -83,11 +83,12 @@ class Event(models.Model):
             GinIndex(fields=["payload"]),
             models.Index(fields=["user_external_id", "event_type", "-occurred_at"]),
             models.Index(fields=["processed", "received_at"]),
+            models.Index(fields=["workspace", "-occurred_at"]),
         ]
-        # Idempotência: mesmo external_event_id não pode duplicar
+        # Idempotência: mesmo external_event_id não pode duplicar dentro do workspace
         constraints = [
             models.UniqueConstraint(
-                fields=["event_type", "external_event_id"],
+                fields=["workspace", "event_type", "external_event_id"],
                 name="unique_event_per_type",
             )
         ]

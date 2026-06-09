@@ -9,6 +9,14 @@ from apps.messaging.models import MessageLog, TrackedLink
 from apps.messaging.tasks import record_link_click
 from apps.messaging.tracking import should_track, wrap_links
 from apps.profiles.models import Profile
+from apps.workspaces.models import Workspace
+
+
+def _primary_workspace():
+    ws, _ = Workspace.objects.get_or_create(
+        slug="principal", defaults={"name": "Principal", "is_primary": True}
+    )
+    return ws
 
 
 @override_settings(
@@ -16,8 +24,12 @@ from apps.profiles.models import Profile
 )
 class WrapLinksTests(TestCase):
     def setUp(self):
-        self.profile = Profile.objects.create(external_id="u1", phone="+5511999990000")
+        self.workspace = _primary_workspace()
+        self.profile = Profile.objects.create(
+            workspace=self.workspace, external_id="u1", phone="+5511999990000"
+        )
         self.log = MessageLog.objects.create(
+            workspace=self.workspace,
             profile=self.profile,
             channel="sms",
             recipient=self.profile.phone,
@@ -79,8 +91,12 @@ class WrapLinksTests(TestCase):
 
 class RecordClickTests(TestCase):
     def setUp(self):
-        self.profile = Profile.objects.create(external_id="u2", phone="+5511999990001")
+        self.workspace = _primary_workspace()
+        self.profile = Profile.objects.create(
+            workspace=self.workspace, external_id="u2", phone="+5511999990001"
+        )
         self.log = MessageLog.objects.create(
+            workspace=self.workspace,
             profile=self.profile,
             channel="sms",
             recipient=self.profile.phone,
@@ -119,8 +135,12 @@ class RecordClickTests(TestCase):
 
 class TrackClickViewTests(TestCase):
     def setUp(self):
-        self.profile = Profile.objects.create(external_id="u3", phone="+5511999990002")
+        self.workspace = _primary_workspace()
+        self.profile = Profile.objects.create(
+            workspace=self.workspace, external_id="u3", phone="+5511999990002"
+        )
         self.log = MessageLog.objects.create(
+            workspace=self.workspace,
             profile=self.profile, channel="sms", recipient=self.profile.phone,
             template_code="t", campaign_id="f", status="sent",
         )

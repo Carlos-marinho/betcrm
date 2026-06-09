@@ -15,22 +15,24 @@ from rest_framework.response import Response
 from apps.flows.models import Flow, FlowExecution
 from apps.messaging.models import MessageLog
 from apps.profiles.models import Profile
+from apps.workspaces.scoping import resolve_workspace
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def overview(request):
     """GET /api/v1/analytics/overview?hours=24"""
+    workspace = resolve_workspace(request)
     hours = int(request.GET.get("hours", 24))
     cutoff = timezone.now() - timedelta(hours=hours)
 
     # Profiles
-    total_profiles = Profile.objects.filter(is_deleted=False).count()
-    new_profiles = Profile.objects.filter(created_at__gte=cutoff).count()
-    ftd_profiles = Profile.objects.filter(ftd_at__gte=cutoff).count()
+    total_profiles = Profile.objects.filter(is_deleted=False, workspace=workspace).count()
+    new_profiles = Profile.objects.filter(created_at__gte=cutoff, workspace=workspace).count()
+    ftd_profiles = Profile.objects.filter(ftd_at__gte=cutoff, workspace=workspace).count()
 
     # Messages
-    msgs = MessageLog.objects.filter(created_at__gte=cutoff)
+    msgs = MessageLog.objects.filter(created_at__gte=cutoff, workspace=workspace)
     msgs_total = msgs.count()
     msgs_sent = msgs.filter(status__in=["sent", "delivered", "opened", "clicked"]).count()
     msgs_delivered = msgs.filter(delivered_at__isnull=False).count()
@@ -38,8 +40,8 @@ def overview(request):
     msgs_clicked = msgs.filter(clicked_at__isnull=False).count()
 
     # Flow
-    active_flows = Flow.objects.filter(is_active=True).count()
-    active_executions = FlowExecution.objects.filter(state="active").count()
+    active_flows = Flow.objects.filter(is_active=True, workspace=workspace).count()
+    active_executions = FlowExecution.objects.filter(state="active", workspace=workspace).count()
 
     return Response({
         "window_hours": hours,
@@ -73,12 +75,13 @@ def trend(request):
     Retorna volume de mensagens enviadas por dia e canal nos últimos N dias.
     Usado nos gráficos de área/barra da página de analytics.
     """
+    workspace = resolve_workspace(request)
     days = min(int(request.GET.get("days", 7)), 90)
     cutoff = timezone.now() - timedelta(days=days)
 
     rows = (
         MessageLog.objects
-        .filter(created_at__gte=cutoff)
+        .filter(created_at__gte=cutoff, workspace=workspace)
         .annotate(date=TruncDate("created_at"))
         .values("date", "channel")
         .annotate(count=Count("id"))
@@ -108,8 +111,9 @@ def trend(request):
 @permission_classes([IsAuthenticated])
 def flow_funnel(request, flow_id: int):
     """GET /api/v1/analytics/flows/<id>/funnel"""
+    workspace = resolve_workspace(request)
     try:
-        flow = Flow.objects.get(id=flow_id)
+        flow = Flow.objects.get(id=flow_id, workspace=workspace)
     except Flow.DoesNotExist:
         return Response({"error": "flow_not_found"}, status=404)
 
@@ -159,14 +163,15 @@ def flow_messages(request, flow_id: int):
     Email: aberturas/cliques vêm do webhook do provider (Mailgun).
     SMS: cliques vêm do redirect próprio (TrackedLink); não há "abertura".
     """
+    workspace = resolve_workspace(request)
     try:
-        flow = Flow.objects.get(id=flow_id)
+        flow = Flow.objects.get(id=flow_id, workspace=workspace)
     except Flow.DoesNotExist:
         return Response({"error": "flow_not_found"}, status=404)
 
     rows = (
         MessageLog.objects
-        .filter(campaign_id=flow.code)
+        .filter(campaign_id=flow.code, workspace=workspace)
         .values("channel")
         .annotate(
             sent=Count("id", filter=Q(status__in=_SENT_STATUSES)),
@@ -228,11 +233,12 @@ def flows_summary(request):
     Rollup de mensagens de TODOS os fluxos numa única query, para os cards da
     listagem. Retorna um dict indexado por flow.code com envios e taxas.
     """
-    flow_codes = set(Flow.objects.values_list("code", flat=True))
+    workspace = resolve_workspace(request)
+    flow_codes = set(Flow.objects.filter(workspace=workspace).values_list("code", flat=True))
 
     rows = (
         MessageLog.objects
-        .filter(campaign_id__in=flow_codes)
+        .filter(campaign_id__in=flow_codes, workspace=workspace)
         .values("campaign_id")
         .annotate(
             sent=Count("id", filter=Q(status__in=_SENT_STATUSES)),

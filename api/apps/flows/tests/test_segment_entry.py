@@ -18,13 +18,15 @@ DEFAULT_DEFINITION = {
 
 
 @pytest.fixture
-def segment_profiles(db):
+def segment_profiles(db, workspace):
     matching = Profile.objects.create(
+        workspace=workspace,
         external_id="vip_1",
         email="vip@example.com",
         ltv=1500,
     )
     Profile.objects.create(
+        workspace=workspace,
         external_id="regular_1",
         email="regular@example.com",
         ltv=100,
@@ -33,16 +35,18 @@ def segment_profiles(db):
 
 
 @pytest.fixture
-def flow_profile(db):
+def flow_profile(db, workspace):
     return Profile.objects.create(
+        workspace=workspace,
         external_id="flow_user_1",
         email="flow@example.com",
         ltv=100,
     )
 
 
-def create_flow(**overrides):
+def create_flow(workspace, **overrides):
     defaults = {
+        "workspace": workspace,
         "name": "Reentry Flow",
         "code": "reentry_flow",
         "trigger_type": "event",
@@ -54,8 +58,9 @@ def create_flow(**overrides):
     return Flow.objects.create(**defaults)
 
 
-def test_segment_entry_flow_enrolls_matching_profiles(segment_profiles):
+def test_segment_entry_flow_enrolls_matching_profiles(segment_profiles, workspace):
     Segment.objects.create(
+        workspace=workspace,
         name="VIP",
         code="vip",
         rules={
@@ -64,6 +69,7 @@ def test_segment_entry_flow_enrolls_matching_profiles(segment_profiles):
         },
     )
     flow = Flow.objects.create(
+        workspace=workspace,
         name="VIP Flow",
         code="vip_flow",
         trigger_type="segment_entry",
@@ -79,8 +85,9 @@ def test_segment_entry_flow_enrolls_matching_profiles(segment_profiles):
     assert execution.trigger_event_id is None
 
 
-def test_segment_entry_flow_does_not_duplicate_active_execution(segment_profiles):
+def test_segment_entry_flow_does_not_duplicate_active_execution(segment_profiles, workspace):
     Segment.objects.create(
+        workspace=workspace,
         name="VIP",
         code="vip",
         rules={
@@ -89,6 +96,7 @@ def test_segment_entry_flow_does_not_duplicate_active_execution(segment_profiles
         },
     )
     flow = Flow.objects.create(
+        workspace=workspace,
         name="VIP Flow",
         code="vip_flow",
         trigger_type="segment_entry",
@@ -103,9 +111,10 @@ def test_segment_entry_flow_does_not_duplicate_active_execution(segment_profiles
     assert FlowExecution.objects.filter(flow=flow, profile=segment_profiles).count() == 1
 
 
-def test_flow_without_reentry_blocks_after_finished_execution(flow_profile):
-    flow = create_flow(allow_reentry=False)
+def test_flow_without_reentry_blocks_after_finished_execution(flow_profile, workspace):
+    flow = create_flow(workspace, allow_reentry=False)
     FlowExecution.objects.create(
+        workspace=workspace,
         flow=flow,
         profile=flow_profile,
         current_node_id="exit",
@@ -119,9 +128,10 @@ def test_flow_without_reentry_blocks_after_finished_execution(flow_profile):
     assert FlowExecution.objects.filter(flow=flow, profile=flow_profile).count() == 1
 
 
-def test_flow_with_reentry_blocks_during_cooldown(flow_profile):
-    flow = create_flow(allow_reentry=True, reentry_cooldown_days=7)
+def test_flow_with_reentry_blocks_during_cooldown(flow_profile, workspace):
+    flow = create_flow(workspace, allow_reentry=True, reentry_cooldown_days=7)
     FlowExecution.objects.create(
+        workspace=workspace,
         flow=flow,
         profile=flow_profile,
         current_node_id="exit",
@@ -135,9 +145,10 @@ def test_flow_with_reentry_blocks_during_cooldown(flow_profile):
     assert FlowExecution.objects.filter(flow=flow, profile=flow_profile).count() == 1
 
 
-def test_flow_with_reentry_allows_after_cooldown(flow_profile):
-    flow = create_flow(allow_reentry=True, reentry_cooldown_days=7)
+def test_flow_with_reentry_allows_after_cooldown(flow_profile, workspace):
+    flow = create_flow(workspace, allow_reentry=True, reentry_cooldown_days=7)
     FlowExecution.objects.create(
+        workspace=workspace,
         flow=flow,
         profile=flow_profile,
         current_node_id="exit",

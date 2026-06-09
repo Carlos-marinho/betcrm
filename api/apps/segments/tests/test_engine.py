@@ -7,10 +7,10 @@ from apps.segments.engine import SegmentEngine, SegmentEngineError
 
 
 @pytest.fixture
-def sample_profiles(db):
-    Profile.objects.create(external_id="u1", email="a@a.com", ltv=100, deposit_count=1, tags=["FTD"])
-    Profile.objects.create(external_id="u2", email="b@b.com", ltv=5000, deposit_count=10, tags=["FTD", "VIP_OURO"])
-    Profile.objects.create(external_id="u3", email="c@c.com", ltv=0, deposit_count=0, tags=["NRC"])
+def sample_profiles(db, workspace):
+    Profile.objects.create(workspace=workspace, external_id="u1", email="a@a.com", ltv=100, deposit_count=1, tags=["FTD"])
+    Profile.objects.create(workspace=workspace, external_id="u2", email="b@b.com", ltv=5000, deposit_count=10, tags=["FTD", "VIP_OURO"])
+    Profile.objects.create(workspace=workspace, external_id="u3", email="c@c.com", ltv=0, deposit_count=0, tags=["NRC"])
 
 
 def test_simple_gte(sample_profiles):

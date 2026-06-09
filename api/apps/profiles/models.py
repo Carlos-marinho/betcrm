@@ -7,19 +7,19 @@ Profile = visão unificada do usuário, com atributos calculados.
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
-from apps.core.models import SoftDeleteModel, TimeStampedModel
+from apps.core.models import SoftDeleteModel, TimeStampedModel, WorkspaceScopedModel
 
 
-class Profile(TimeStampedModel, SoftDeleteModel):
+class Profile(WorkspaceScopedModel, TimeStampedModel, SoftDeleteModel):
     """
     Perfil unificado do usuário da plataforma de bet.
 
-    external_id: ID na plataforma de origem (não muda nunca).
+    external_id: ID na plataforma de origem (não muda nunca, único por workspace).
     Demais atributos: calculados via tasks ao processar eventos.
     """
 
     # ---------- Identificação ----------
-    external_id = models.CharField(max_length=100, unique=True, db_index=True)
+    external_id = models.CharField(max_length=100, db_index=True)
     email = models.EmailField(null=True, blank=True, db_index=True)
     phone = models.CharField(max_length=20, null=True, blank=True, db_index=True)
     push_token = models.CharField(max_length=500, null=True, blank=True)
@@ -120,8 +120,15 @@ class Profile(TimeStampedModel, SoftDeleteModel):
             models.Index(fields=["ltv"]),
             models.Index(fields=["ftd_at"]),
             models.Index(fields=["last_login_at"]),
+            models.Index(fields=["workspace", "external_id"]),
             GinIndex(fields=["tags"]),
             GinIndex(fields=["custom_attributes"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "external_id"],
+                name="unique_external_id_per_workspace",
+            ),
         ]
 
     def __str__(self) -> str:

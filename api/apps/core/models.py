@@ -16,6 +16,26 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class WorkspaceScopedModel(models.Model):
+    """
+    Mixin para entidades isoladas por workspace (multi-tenancy).
+
+    Adiciona uma FK obrigatória para Workspace. As migrations adicionam o campo
+    como nullable primeiro, fazem o backfill para o workspace principal e só então
+    tornam non-null — por isso o campo nasce sem default aqui.
+    """
+
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        on_delete=models.CASCADE,
+        related_name="%(app_label)s_%(class)s_set",
+        db_index=True,
+    )
+
+    class Meta:
+        abstract = True
+
+
 class SoftDeleteModel(models.Model):
     """Permite soft delete (importante para LGPD/auditoria)."""
 

@@ -12,6 +12,8 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
+from apps.workspaces.scoping import WorkspaceScopedViewSet
+
 from .models import Profile
 from .serializers import ProfileImportResultSerializer, ProfileListSerializer, ProfileSerializer
 from .tasks import _split_full_name, recalculate_profile_tags
@@ -115,15 +117,16 @@ def _get_import_event_types():
 
 
 def _create_import_event(event_type, external_event_id: str, user_external_id: str,
-                         payload: dict, occurred_at: datetime):
+                         payload: dict, occurred_at: datetime, workspace):
     """
     Creates an Event for the given parameters if it doesn't exist yet.
     Returns the Event object if newly created, None if it already existed.
-    Idempotency is enforced by the unique constraint on (event_type, external_event_id).
+    Idempotency is enforced by the unique constraint on (workspace, event_type, external_event_id).
     """
     from apps.events.models import Event
 
     event, created = Event.objects.get_or_create(
+        workspace=workspace,
         event_type=event_type,
         external_event_id=external_event_id,
         defaults={
@@ -135,7 +138,7 @@ def _create_import_event(event_type, external_event_id: str, user_external_id: s
     return event if created else None
 
 
-def _process_csv_import(content: str) -> dict:
+def _process_csv_import(content: str, workspace) -> dict:
     """
     Upsert profiles from CSV content string, then create historical events
     (user.register, payment.deposit.completed, user.login) to populate
@@ -197,6 +200,7 @@ def _process_csv_import(content: str) -> dict:
         # --- Bloco 1: upsert do profile (conta como erro se falhar) ---
         try:
             profile, was_created = Profile.objects.get_or_create(
+                workspace=workspace,
                 external_id=external_id,
                 defaults={**identity, "registered_at": registered_at,
                           "last_login_at": last_login_at, "ftd_at": ftd_at},
@@ -243,7 +247,7 @@ def _process_csv_import(content: str) -> dict:
         def _dispatch(et, ext_id, payload, occurred_at):
             nonlocal events_created
             try:
-                ev = _create_import_event(et, ext_id, external_id, payload, occurred_at)
+                ev = _create_import_event(et, ext_id, external_id, payload, occurred_at, workspace)
                 if ev:
                     try:
                         process_event.delay(ev.id)
@@ -285,7 +289,7 @@ def _process_csv_import(content: str) -> dict:
     }
 
 
-class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
+class ProfileViewSet(WorkspaceScopedViewSet, viewsets.ReadOnlyModelViewSet):
     """
     GET    /api/v1/profiles/
     GET    /api/v1/profiles/{id}/
@@ -320,14 +324,14 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
         except UnicodeDecodeError:
             content = raw.decode("latin-1")
 
-        stats = _process_csv_import(content)
+        stats = _process_csv_import(content, self.workspace)
         serializer = ProfileImportResultSerializer(stats)
         status_code = 200 if not stats["errors"] else 207
         return Response(serializer.data, status=status_code)
 
     @action(detail=False, methods=["get"], url_path="by-external/(?P<external_id>[^/.]+)")
     def by_external(self, request, external_id=None):
-        profile = self.queryset.filter(external_id=external_id).first()
+        profile = self.get_queryset().filter(external_id=external_id).first()
         if not profile:
             return Response({"error": "not_found"}, status=404)
         return Response(ProfileSerializer(profile).data)
@@ -342,7 +346,12 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
         profile = self.get_object()
 
-        events = Event.objects.filter(user_external_id=profile.external_id).order_by("-occurred_at")[:50]
+        events = (
+            Event.objects.filter(
+                workspace=profile.workspace_id, user_external_id=profile.external_id
+            )
+            .order_by("-occurred_at")[:50]
+        )
         messages = MessageLog.objects.filter(profile=profile).order_by("-created_at")[:50]
         activities = (
             ProfileActivity.objects.filter(

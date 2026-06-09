@@ -1,23 +1,27 @@
-"""Views de configurações de sistema (API keys, webhooks)."""
+"""Views de configurações do workspace ativo (API keys, webhooks)."""
 
 import logging
-import secrets
 
-from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import SystemSetting
+from apps.workspaces.scoping import resolve_workspace
 
 logger = logging.getLogger(__name__)
+
+
+def _settings_for(request):
+    """WorkspaceSettings do workspace ativo (criado on-demand)."""
+    workspace = resolve_workspace(request)
+    return workspace.settings_obj
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_settings(request):
-    """GET /api/v1/settings/ — Retorna configurações de sistema."""
-    s = SystemSetting.get_instance()
+    """GET /api/v1/settings/ — Configurações do workspace ativo."""
+    s = _settings_for(request)
     return Response({
         "ingest_api_key": s.ingest_api_key or None,
         "ingest_api_key_created_at": s.ingest_api_key_created_at,
@@ -30,21 +34,22 @@ def get_settings(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def rotate_api_key(request):
-    """POST /api/v1/settings/rotate-key/ — Gera nova API key de ingestão."""
-    s = SystemSetting.get_instance()
-    new_key = "bcrm_sk_live_" + secrets.token_hex(16)
-    s.ingest_api_key = new_key
-    s.ingest_api_key_created_at = timezone.now()
-    s.save(update_fields=["ingest_api_key", "ingest_api_key_created_at", "updated_at"])
-    logger.info("API key de ingestão rotacionada pelo usuário %s", request.user)
+    """POST /api/v1/settings/rotate-key/ — Gera nova API key de ingestão do workspace."""
+    s = _settings_for(request)
+    new_key = s.rotate_ingest_api_key()
+    logger.info(
+        "API key de ingestão rotacionada (workspace=%s) pelo usuário %s",
+        s.workspace_id,
+        request.user,
+    )
     return Response({"ingest_api_key": new_key})
 
 
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def update_webhook_config(request):
-    """PUT /api/v1/settings/webhook/ — Atualiza configuração de webhook de saída."""
-    s = SystemSetting.get_instance()
+    """PUT /api/v1/settings/webhook/ — Webhook de saída do workspace ativo."""
+    s = _settings_for(request)
     fields = []
 
     if "webhook_url" in request.data:

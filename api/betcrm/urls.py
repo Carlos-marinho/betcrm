@@ -24,6 +24,7 @@ api_v1_patterns = [
     path("analytics/", include("apps.analytics.urls")),
     path("compliance/", include("apps.compliance.urls")),
     path("settings/", include("apps.core.urls")),
+    path("workspaces/", include("apps.workspaces.urls")),
 ]
 
 urlpatterns = [

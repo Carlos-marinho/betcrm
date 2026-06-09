@@ -44,6 +44,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "apps.core",
+    "apps.workspaces",
     "apps.events",
     "apps.profiles",
     "apps.segments",

@@ -6,10 +6,10 @@ Versionados, com A/B testing nativo e renderização via Jinja2 sandbox.
 
 from django.db import models
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, WorkspaceScopedModel
 
 
-class EmailAsset(TimeStampedModel):
+class EmailAsset(WorkspaceScopedModel, TimeStampedModel):
     """Imagem/asset reutilizável em templates de email (banners, logos, rodapés)."""
 
     ASSET_TYPE_CHOICES = [
@@ -46,19 +46,19 @@ class EmailAsset(TimeStampedModel):
         return f"{self.name} ({self.asset_type})"
 
     def save(self, *args, **kwargs):
-        # Garante unicidade do global footer
+        # Garante unicidade do global footer dentro do workspace
         if self.is_global_footer:
-            EmailAsset.objects.filter(is_global_footer=True).exclude(pk=self.pk).update(
-                is_global_footer=False
-            )
+            EmailAsset.objects.filter(
+                is_global_footer=True, workspace_id=self.workspace_id
+            ).exclude(pk=self.pk).update(is_global_footer=False)
         super().save(*args, **kwargs)
 
 
-class MessageTemplate(TimeStampedModel):
+class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
     """
     Template de mensagem versionado.
 
-    code: identificador estável (ex: 'welcome_ftd_v1')
+    code: identificador estável (ex: 'welcome_ftd_v1'), único por workspace.
     """
 
     CHANNEL_CHOICES = [
@@ -74,7 +74,7 @@ class MessageTemplate(TimeStampedModel):
         ("system", "System"),
     ]
 
-    code = models.CharField(max_length=100, unique=True, db_index=True)
+    code = models.CharField(max_length=100, db_index=True)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
 
@@ -121,12 +121,17 @@ class MessageTemplate(TimeStampedModel):
 
     class Meta:
         ordering = ["channel", "code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "code"], name="unique_template_code_per_workspace"
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.code} ({self.channel})"
 
 
-class AbTest(TimeStampedModel):
+class AbTest(WorkspaceScopedModel, TimeStampedModel):
     """Teste A/B com múltiplas variantes."""
 
     name = models.CharField(max_length=200)
@@ -156,12 +161,11 @@ class AbTest(TimeStampedModel):
         return self.name
 
 
-class CampaignCoupon(TimeStampedModel):
+class CampaignCoupon(WorkspaceScopedModel, TimeStampedModel):
     """Cupom de bônus vinculado a um flow/campanha — gerenciado via painel."""
 
     key = models.SlugField(
         max_length=80,
-        unique=True,
         db_index=True,
         help_text="Chave interna usada nos flows (ex: 'welcome', 'winback_gamer')",
     )
@@ -189,6 +193,11 @@ class CampaignCoupon(TimeStampedModel):
 
     class Meta:
         ordering = ["key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "key"], name="unique_coupon_key_per_workspace"
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.key} → {self.code}"

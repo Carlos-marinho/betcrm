@@ -7,10 +7,10 @@ frequency capping, quiet hours e logs auditáveis.
 
 from django.db import models
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, WorkspaceScopedModel
 
 
-class ProviderConfig(TimeStampedModel):
+class ProviderConfig(WorkspaceScopedModel, TimeStampedModel):
     """
     Configuração de um provider de mensageria.
 
@@ -40,7 +40,7 @@ class ProviderConfig(TimeStampedModel):
         ("FcmPushProvider", "Firebase Cloud Messaging"),
     ]
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, db_index=True)
     provider_class = models.CharField(max_length=100, choices=PROVIDER_CLASS_CHOICES)
 
@@ -60,6 +60,12 @@ class ProviderConfig(TimeStampedModel):
         ordering = ["channel", "priority", "name"]
         indexes = [
             models.Index(fields=["channel", "is_active", "priority"]),
+            models.Index(fields=["workspace", "channel", "is_active", "priority"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "name"], name="unique_provider_name_per_workspace"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -67,7 +73,7 @@ class ProviderConfig(TimeStampedModel):
         return f"{self.name} ({self.get_channel_display()}){flag}"
 
 
-class MessageLog(models.Model):
+class MessageLog(WorkspaceScopedModel):
     """
     Log imutável de cada mensagem enviada.
     Permite auditoria, tracking e analytics.
@@ -130,6 +136,7 @@ class MessageLog(models.Model):
             models.Index(fields=["profile", "channel", "-created_at"]),
             models.Index(fields=["status", "channel"]),
             models.Index(fields=["template_code", "-created_at"]),
+            models.Index(fields=["workspace", "-created_at"]),
         ]
 
 

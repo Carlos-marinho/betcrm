@@ -43,8 +43,9 @@ def _new_slug() -> str:
     return secrets.token_urlsafe(_SLUG_BYTES + 4)
 
 
-def _public_url(slug: str) -> str:
-    return f"{settings.TRACKING_BASE_URL}/r/{slug}"
+def _public_url(slug: str, base_url: str = "") -> str:
+    base = (base_url or settings.TRACKING_BASE_URL).rstrip("/")
+    return f"{base}/r/{slug}"
 
 
 def _is_http_url(value) -> bool:
@@ -57,6 +58,7 @@ def wrap_links(
     body: str,
     log: MessageLog,
     flow_code: str = "",
+    tracking_base_url: str = "",
 ) -> tuple[dict, str]:
     """
     Cria TrackedLinks para as URLs da mensagem e devolve (data, body) reescritos.
@@ -75,7 +77,7 @@ def wrap_links(
 
     def _track(destination: str, link_key: str) -> str:
         if destination in url_to_slug:
-            return _public_url(url_to_slug[destination])
+            return _public_url(url_to_slug[destination], tracking_base_url)
         try:
             slug = _new_slug()
             TrackedLink.objects.create(
@@ -88,7 +90,7 @@ def wrap_links(
                 destination_url=destination[:2000],
             )
             url_to_slug[destination] = slug
-            return _public_url(slug)
+            return _public_url(slug, tracking_base_url)
         except Exception:
             logger.exception("Falha ao criar TrackedLink para log=%s", log.id)
             return destination
@@ -114,8 +116,10 @@ def wrap_links(
     return data, body
 
 
-def should_track(channel: str) -> bool:
-    return (
-        getattr(settings, "SMS_LINK_TRACKING_ENABLED", False)
-        and channel in TRACKED_CLICK_CHANNELS
+def should_track(channel: str, cfg=None) -> bool:
+    enabled = (
+        cfg.sms_link_tracking_enabled
+        if cfg is not None
+        else getattr(settings, "SMS_LINK_TRACKING_ENABLED", False)
     )
+    return enabled and channel in TRACKED_CLICK_CHANNELS

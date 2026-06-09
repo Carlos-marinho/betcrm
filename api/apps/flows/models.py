@@ -12,10 +12,10 @@ Estrutura:
 
 from django.db import models
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, WorkspaceScopedModel
 
 
-class Flow(TimeStampedModel):
+class Flow(WorkspaceScopedModel, TimeStampedModel):
     """Definição de um fluxo (template de jornada)."""
 
     TRIGGER_TYPE_CHOICES = [
@@ -24,8 +24,8 @@ class Flow(TimeStampedModel):
         ("scheduled", "Scheduled"),
     ]
 
-    name = models.CharField(max_length=200, unique=True)
-    code = models.SlugField(max_length=100, unique=True, db_index=True)
+    name = models.CharField(max_length=200)
+    code = models.SlugField(max_length=100, db_index=True)
     description = models.TextField(blank=True)
 
     trigger_type = models.CharField(
@@ -68,12 +68,20 @@ class Flow(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "code"], name="unique_flow_code_per_workspace"
+            ),
+            models.UniqueConstraint(
+                fields=["workspace", "name"], name="unique_flow_name_per_workspace"
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({'active' if self.is_active else 'inactive'})"
 
 
-class FlowScheduleRun(models.Model):
+class FlowScheduleRun(WorkspaceScopedModel):
     """
     Auditoria de cada disparo de um fluxo agendado.
 
@@ -105,7 +113,7 @@ class FlowScheduleRun(models.Model):
         return f"{self.flow.code} @ {self.run_at:%Y-%m-%d %H:%M} ({self.status})"
 
 
-class FlowExecution(models.Model):
+class FlowExecution(WorkspaceScopedModel):
     """Instância de fluxo em execução para um profile."""
 
     STATE_CHOICES = [

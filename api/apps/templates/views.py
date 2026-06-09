@@ -9,6 +9,8 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from apps.workspaces.scoping import WorkspaceScopedViewSet
+
 from .models import AbTest, AbTestVariant, CampaignCoupon, EmailAsset, MessageTemplate
 
 _ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
@@ -57,6 +59,7 @@ class EmailAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailAsset
         fields = "__all__"
+        read_only_fields = ["workspace"]
 
     def get_file_url(self, obj: EmailAsset) -> str | None:
         request = self.context.get("request")
@@ -71,7 +74,7 @@ class EmailAssetSerializer(serializers.ModelSerializer):
         return value
 
 
-class EmailAssetViewSet(viewsets.ModelViewSet):
+class EmailAssetViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     queryset = EmailAsset.objects.all()
     serializer_class = EmailAssetSerializer
     filterset_fields = ["asset_type", "is_active", "is_global_footer", "folder"]
@@ -89,7 +92,8 @@ class EmailAssetViewSet(viewsets.ModelViewSet):
     def folders(self, request):
         """Retorna lista de pastas únicas existentes."""
         folders = (
-            EmailAsset.objects.exclude(folder="")
+            EmailAsset.objects.filter(workspace=self.workspace)
+            .exclude(folder="")
             .values_list("folder", flat=True)
             .distinct()
             .order_by("folder")
@@ -113,6 +117,7 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = MessageTemplate
         fields = "__all__"
+        read_only_fields = ["workspace"]
 
     def get_banner_asset_url(self, obj: MessageTemplate) -> str | None:
         request = self.context.get("request")
@@ -137,9 +142,10 @@ class AbTestSerializer(serializers.ModelSerializer):
     class Meta:
         model = AbTest
         fields = "__all__"
+        read_only_fields = ["workspace"]
 
 
-class MessageTemplateViewSet(viewsets.ModelViewSet):
+class MessageTemplateViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     queryset = MessageTemplate.objects.all().order_by("channel", "code")
     serializer_class = MessageTemplateSerializer
     filterset_fields = ["channel", "category", "is_active"]
@@ -156,7 +162,7 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
         external_id = request.data.get("profile_external_id")
         if external_id:
             try:
-                profile = Profile.objects.get(external_id=external_id)
+                profile = Profile.objects.get(external_id=external_id, workspace=self.workspace)
             except Profile.DoesNotExist:
                 return Response({"error": "profile_not_found"}, status=404)
         else:
@@ -171,6 +177,7 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
                 deposit_count=5,
                 tags=["FTD", "VIP_PRATA"],
                 consent_email=True,
+                workspace=self.workspace,
             )
 
         try:
@@ -179,6 +186,7 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
                 profile,
                 template.channel,
                 request.data.get("extra_context", {}),
+                workspace=self.workspace,
             )
         except Exception as e:
             return Response({"error": str(e)}, status=400)
@@ -198,7 +206,7 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
         )
 
 
-class AbTestViewSet(viewsets.ModelViewSet):
+class AbTestViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     queryset = AbTest.objects.all()
     serializer_class = AbTestSerializer
 
@@ -212,9 +220,10 @@ class CampaignCouponSerializer(serializers.ModelSerializer):
     class Meta:
         model = CampaignCoupon
         fields = "__all__"
+        read_only_fields = ["workspace"]
 
 
-class CampaignCouponViewSet(viewsets.ModelViewSet):
+class CampaignCouponViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     serializer_class = CampaignCouponSerializer
     filterset_fields = ["is_active", "flow_code"]
     search_fields = ["key", "code", "description", "flow_code"]
@@ -222,15 +231,22 @@ class CampaignCouponViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         from apps.flows.models import FlowExecution, FlowScheduleRun
 
+        workspace = self.workspace
         has_been_sent = Case(
             When(
-                Exists(FlowExecution.objects.filter(flow__code=OuterRef("flow_code"))),
+                Exists(
+                    FlowExecution.objects.filter(
+                        flow__code=OuterRef("flow_code"), workspace=workspace
+                    )
+                ),
                 then=Value(True),
             ),
             When(
                 Exists(
                     FlowScheduleRun.objects.filter(
-                        flow__code=OuterRef("flow_code"), status="completed"
+                        flow__code=OuterRef("flow_code"),
+                        status="completed",
+                        workspace=workspace,
                     )
                 ),
                 then=Value(True),
@@ -238,15 +254,19 @@ class CampaignCouponViewSet(viewsets.ModelViewSet):
             default=Value(False),
             output_field=BooleanField(),
         )
-        return CampaignCoupon.objects.annotate(has_been_sent=has_been_sent).order_by("key")
+        return (
+            CampaignCoupon.objects.filter(workspace=workspace)
+            .annotate(has_been_sent=has_been_sent)
+            .order_by("key")
+        )
 
     def perform_update(self, serializer):
         from django.core.cache import cache
         instance = serializer.save()
-        # Invalida cache Redis ao salvar
-        cache.delete(f"campaign_coupon:{instance.key}")
+        # Invalida cache Redis ao salvar (chave inclui o workspace)
+        cache.delete(f"campaign_coupon:{instance.workspace_id}:{instance.key}")
 
     def perform_destroy(self, instance):
         from django.core.cache import cache
-        cache.delete(f"campaign_coupon:{instance.key}")
+        cache.delete(f"campaign_coupon:{instance.workspace_id}:{instance.key}")
         instance.delete()

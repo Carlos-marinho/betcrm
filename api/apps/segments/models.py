@@ -9,14 +9,14 @@ Podem ser:
 
 from django.db import models
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, WorkspaceScopedModel
 
 
-class Segment(TimeStampedModel):
+class Segment(WorkspaceScopedModel, TimeStampedModel):
     """Definição de um segmento."""
 
-    name = models.CharField(max_length=200, unique=True)
-    code = models.SlugField(max_length=100, unique=True, db_index=True)
+    name = models.CharField(max_length=200)
+    code = models.SlugField(max_length=100, db_index=True)
     description = models.TextField(blank=True)
 
     # Regras em formato JSON (ver SegmentEngine.parse_rules)
@@ -34,6 +34,14 @@ class Segment(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "code"], name="unique_segment_code_per_workspace"
+            ),
+            models.UniqueConstraint(
+                fields=["workspace", "name"], name="unique_segment_name_per_workspace"
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name

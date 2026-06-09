@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
@@ -17,8 +18,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
-from apps.core.models import SystemSetting
-from apps.core.utils import hmac_signature_matches, verify_hmac_signature
+from apps.core.utils import hmac_signature_matches
 
 from .models import Event, EventType
 from .serializers import EventDetailSerializer, EventIngestSerializer, EventListSerializer
@@ -31,31 +31,41 @@ class WebhookThrottle(AnonRateThrottle):
     scope = "webhook"
 
 
-def _unique_nonempty(values):
-    return [value for value in dict.fromkeys(values) if value]
+def _resolve_ingest_workspace(request, signature: str, *configured_secrets: str):
+    """
+    Identifica o workspace de origem de um webhook de ingestão pela assinatura HMAC.
 
+    Tenta, nesta ordem:
+    1. As ingest_api_keys de cada workspace (cada uma é o segredo HMAC daquele
+       workspace) → retorna o workspace correspondente e marca a key como usada.
+    2. Os segredos globais configurados em settings (WEBHOOK_HMAC_SECRET, etc.) →
+       compatibilidade com integrações legadas; roteia para o workspace principal.
 
-def _get_ingest_api_key() -> str:
-    return SystemSetting.get_instance().ingest_api_key
+    Retorna o Workspace ou None se nenhuma assinatura conferir.
+    """
+    if not signature:
+        return None
 
+    from apps.workspaces.models import Workspace, WorkspaceSettings
 
-def _mark_ingest_api_key_used(api_key: str) -> None:
-    SystemSetting.objects.filter(pk=1, ingest_api_key=api_key).update(
-        ingest_api_key_last_used_at=timezone.now()
+    body = request.body
+    candidates = (
+        WorkspaceSettings.objects.exclude(ingest_api_key="")
+        .select_related("workspace")
+        .filter(workspace__is_active=True)
     )
+    for ws_settings in candidates:
+        if hmac_signature_matches(body, signature, ws_settings.ingest_api_key):
+            WorkspaceSettings.objects.filter(pk=ws_settings.pk).update(
+                ingest_api_key_last_used_at=timezone.now()
+            )
+            return ws_settings.workspace
 
+    for secret in dict.fromkeys(configured_secrets):
+        if secret and hmac_signature_matches(body, signature, secret):
+            return Workspace.get_primary()
 
-def _verify_webhook_signature(request, signature: str, *configured_secrets: str) -> bool:
-    ingest_api_key = _get_ingest_api_key()
-    secrets = _unique_nonempty([*configured_secrets, ingest_api_key])
-
-    is_valid = verify_hmac_signature(request.body, signature, secrets=secrets)
-    if is_valid and ingest_api_key and hmac_signature_matches(
-        request.body, signature, ingest_api_key
-    ):
-        _mark_ingest_api_key_used(ingest_api_key)
-
-    return is_valid
+    return None
 
 
 @api_view(["POST"])
@@ -86,9 +96,10 @@ def ingest_event(request):
         401 - assinatura HMAC inválida
         409 - evento duplicado (idempotência)
     """
-    # 1. Validar assinatura HMAC
+    # 1. Validar assinatura HMAC e resolver o workspace de origem
     signature = request.headers.get("X-Signature", "")
-    if not _verify_webhook_signature(request, signature, settings.WEBHOOK_HMAC_SECRET):
+    workspace = _resolve_ingest_workspace(request, signature, settings.WEBHOOK_HMAC_SECRET)
+    if workspace is None:
         logger.warning("Webhook com HMAC inválido. IP=%s", request.META.get("REMOTE_ADDR"))
         return Response({"error": "invalid_signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -111,17 +122,22 @@ def ingest_event(request):
         )
 
     # 4. Criar evento (idempotente via unique constraint)
+    # Savepoint próprio: se o INSERT falhar (duplicado), não invalida a transação
+    # externa — permitindo a consulta de idempotência logo abaixo.
     try:
-        event = Event.objects.create(
-            event_type=event_type,
-            external_event_id=data["external_event_id"],
-            user_external_id=data["user_external_id"],
-            payload=data["payload"],
-            occurred_at=parse_datetime(data["occurred_at"]) if isinstance(data["occurred_at"], str) else data["occurred_at"],
-        )
+        with transaction.atomic():
+            event = Event.objects.create(
+                workspace=workspace,
+                event_type=event_type,
+                external_event_id=data["external_event_id"],
+                user_external_id=data["user_external_id"],
+                payload=data["payload"],
+                occurred_at=parse_datetime(data["occurred_at"]) if isinstance(data["occurred_at"], str) else data["occurred_at"],
+            )
     except Exception as e:
         # Duplicado? Retorna 200 (idempotência) sem reprocessar
         existing = Event.objects.filter(
+            workspace=workspace,
             event_type=event_type,
             external_event_id=data["external_event_id"],
         ).first()
@@ -181,9 +197,12 @@ def ingest_meta_system_event(request):
             "metadata": { "source": "meta-system", "requestId": "uuid" }
         }
     """
-    # 1. Validar assinatura HMAC (formato: sha256=<hash>)
+    # 1. Validar assinatura HMAC (formato: sha256=<hash>) e resolver o workspace
     signature = request.headers.get("X-Webhook-Signature", "")
-    if not _verify_webhook_signature(request, signature, settings.WEBHOOK_META_SYSTEM_SECRET):
+    workspace = _resolve_ingest_workspace(
+        request, signature, settings.WEBHOOK_META_SYSTEM_SECRET
+    )
+    if workspace is None:
         logger.warning(
             "Meta-System webhook com HMAC inválido. IP=%s",
             request.META.get("REMOTE_ADDR"),
@@ -250,15 +269,18 @@ def ingest_meta_system_event(request):
         )
 
     try:
-        event = Event.objects.create(
-            event_type=event_type,
-            external_event_id=external_event_id,
-            user_external_id=user_id,
-            payload=data,
-            occurred_at=occurred_at,
-        )
+        with transaction.atomic():
+            event = Event.objects.create(
+                workspace=workspace,
+                event_type=event_type,
+                external_event_id=external_event_id,
+                user_external_id=user_id,
+                payload=data,
+                occurred_at=occurred_at,
+            )
     except Exception:
         existing = Event.objects.filter(
+            workspace=workspace,
             event_type=event_type,
             external_event_id=external_event_id,
         ).first()
@@ -297,8 +319,13 @@ def get_event_detail(request, event_id):
 
     Detalhe completo de um evento: payload, metadados e perfil do usuário.
     """
+    from apps.workspaces.scoping import resolve_workspace
+
+    workspace = resolve_workspace(request)
     try:
-        event = Event.objects.select_related("event_type").get(id=event_id)
+        event = Event.objects.select_related("event_type").get(
+            id=event_id, workspace=workspace
+        )
     except Event.DoesNotExist:
         return Response({"error": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -322,8 +349,15 @@ def list_recent_events(request):
     event_type_code = request.GET.get("event_type")
     user_external_id = request.GET.get("user_external_id", "").strip()
 
+    from apps.workspaces.scoping import resolve_workspace
+
+    workspace = resolve_workspace(request)
     cutoff = timezone.now() - timedelta(hours=hours)
-    qs = Event.objects.select_related("event_type").filter(occurred_at__gte=cutoff).order_by("-occurred_at")
+    qs = (
+        Event.objects.select_related("event_type")
+        .filter(occurred_at__gte=cutoff, workspace=workspace)
+        .order_by("-occurred_at")
+    )
 
     if event_type_code:
         qs = qs.filter(event_type__code=event_type_code)

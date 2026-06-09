@@ -6,8 +6,9 @@ import time
 import requests as http_client
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from apps.workspaces.scoping import WorkspaceScopedViewSet
 
 from .models import Flow, FlowExecution, FlowScheduleRun
 
@@ -18,6 +19,7 @@ class FlowSerializer(serializers.ModelSerializer):
     class Meta:
         model = Flow
         fields = "__all__"
+        read_only_fields = ["workspace"]
 
 
 class FlowScheduleRunSerializer(serializers.ModelSerializer):
@@ -48,10 +50,9 @@ class FlowExecutionSerializer(serializers.ModelSerializer):
         ]
 
 
-class FlowViewSet(viewsets.ModelViewSet):
+class FlowViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     queryset = Flow.objects.all().order_by("name")
     serializer_class = FlowSerializer
-    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["post"], url_path="test_email")
     def test_email(self, request):
@@ -86,13 +87,19 @@ class FlowViewSet(viewsets.ModelViewSet):
             consent_email=True,
         )
 
+        fake_profile.workspace = self.workspace
+
         try:
-            content = TemplateService.render(template_code, fake_profile, "email")
+            content = TemplateService.render(
+                template_code, fake_profile, "email", workspace=self.workspace
+            )
         except Exception as exc:
             return Response({"error": f"Erro ao renderizar template: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
 
         provider_config = (
-            ProviderConfig.objects.filter(channel="email", is_active=True)
+            ProviderConfig.objects.filter(
+                channel="email", is_active=True, workspace=self.workspace
+            )
             .order_by("priority")
             .first()
         )
@@ -221,7 +228,7 @@ class FlowViewSet(viewsets.ModelViewSet):
         return Response(FlowScheduleRunSerializer(runs, many=True).data)
 
 
-class FlowExecutionViewSet(viewsets.ReadOnlyModelViewSet):
+class FlowExecutionViewSet(WorkspaceScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = FlowExecution.objects.select_related("flow", "profile").order_by("-started_at")
     serializer_class = FlowExecutionSerializer
     filterset_fields = ["flow", "state", "profile"]

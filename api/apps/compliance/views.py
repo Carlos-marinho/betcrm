@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.profiles.models import Profile
+from apps.workspaces.scoping import WorkspaceScopedViewSet, resolve_workspace
 
 from .models import ConsentLog, DataRequest
 
@@ -34,11 +35,11 @@ class DataRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class DataRequestViewSet(viewsets.ReadOnlyModelViewSet):
+class DataRequestViewSet(WorkspaceScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = DataRequest.objects.select_related("profile").order_by("-created_at")
     serializer_class = DataRequestSerializer
-    permission_classes = [IsAuthenticated]
     filterset_fields = ["status", "request_type"]
+    workspace_lookup = "profile__workspace"
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +71,14 @@ def unsubscribe(request):
     if not _validate_unsubscribe_token(external_id, token):
         return Response({"error": "invalid_token"}, status=status.HTTP_403_FORBIDDEN)
 
-    try:
-        profile = Profile.objects.get(external_id=external_id)
-    except Profile.DoesNotExist:
+    # O link de unsubscribe carrega o workspace de origem (?ws=<id>). Em bases
+    # com o mesmo external_id em workspaces diferentes, isso desambigua o alvo.
+    ws = request.GET.get("ws") or request.data.get("ws")
+    qs = Profile.objects.filter(external_id=external_id)
+    if ws:
+        qs = qs.filter(workspace_id=ws)
+    profile = qs.first()
+    if profile is None:
         return Response({"status": "ok"})  # não vaza se existe ou não
 
     field = f"consent_{channel}"
@@ -107,8 +113,9 @@ def create_data_request(request):
     if request_type not in ["export", "delete", "anonymize"]:
         return Response({"error": "invalid_request_type"}, status=400)
 
+    workspace = resolve_workspace(request)
     try:
-        profile = Profile.objects.get(external_id=external_id)
+        profile = Profile.objects.get(external_id=external_id, workspace=workspace)
     except Profile.DoesNotExist:
         return Response({"error": "profile_not_found"}, status=404)
 

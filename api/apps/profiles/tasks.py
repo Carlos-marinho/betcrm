@@ -75,6 +75,7 @@ def upsert_profile_from_event(event) -> int:
             defaults["birth_date"] = birth_date
 
     profile, created = Profile.objects.get_or_create(
+        workspace_id=event.workspace_id,
         external_id=event.user_external_id,
         defaults=defaults,
     )
@@ -332,6 +333,7 @@ def update_game_session_stats(profile_id: int):
 
     now = timezone.now()
     base_qs = Event.objects.filter(
+        workspace_id=profile.workspace_id,
         user_external_id=profile.external_id,
         event_type__code="game.started",
     )

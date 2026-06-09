@@ -81,17 +81,18 @@ def verify_hmac_signature(
     return False
 
 
-def is_quiet_hours(at: datetime = None) -> bool:
+def is_quiet_hours(at: datetime = None, start: int = None, end: int = None) -> bool:
     """
     Verifica se o horário atual está em quiet hours (não enviar mensagens).
 
-    Quiet hours padrão: 23h-8h horário local (configurável via env).
+    Quiet hours padrão: 23h-8h horário local (configurável via env ou por
+    workspace, passando start/end explícitos).
     """
     at = at or timezone.localtime()
     hour = at.hour
 
-    start = settings.QUIET_HOURS_START
-    end = settings.QUIET_HOURS_END
+    start = settings.QUIET_HOURS_START if start is None else start
+    end = settings.QUIET_HOURS_END if end is None else end
 
     if start < end:
         # Ex: 1-6 (madrugada simples)

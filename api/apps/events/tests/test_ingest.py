@@ -8,18 +8,20 @@ import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.core.models import SystemSetting
 from apps.events.models import Event, EventType
 
 
 @pytest.fixture
 def event_type_register(db):
-    return EventType.objects.create(
+    et, _ = EventType.objects.get_or_create(
         code="user.register",
-        name="User Register",
-        category="acquisition",
-        priority="high",
+        defaults={
+            "name": "User Register",
+            "category": "acquisition",
+            "priority": "high",
+        },
     )
+    return et
 
 
 @pytest.fixture
@@ -45,7 +47,7 @@ def test_ingest_event_success(api_client, event_type_register, settings):
     signature = _make_signature(body, "test_secret_123")
 
     response = api_client.post(
-        "/api/v1/events/ingest",
+        "/api/v1/events/ingest/",
         data=body,
         content_type="application/json",
         HTTP_X_SIGNATURE=signature,
@@ -61,7 +63,7 @@ def test_ingest_event_invalid_hmac(api_client, event_type_register, settings):
 
     payload = {"event_type": "user.register", "external_event_id": "x", "user_external_id": "u", "occurred_at": "2026-05-17T14:30:00Z", "payload": {}}
     response = api_client.post(
-        "/api/v1/events/ingest",
+        "/api/v1/events/ingest/",
         data=payload,
         format="json",
         HTTP_X_SIGNATURE="invalid_signature",
@@ -85,11 +87,11 @@ def test_ingest_event_duplicate_idempotent(api_client, event_type_register, sett
     signature = _make_signature(body, "test_secret_123")
 
     # Primeiro envio
-    r1 = api_client.post("/api/v1/events/ingest", data=body, content_type="application/json", HTTP_X_SIGNATURE=signature)
+    r1 = api_client.post("/api/v1/events/ingest/", data=body, content_type="application/json", HTTP_X_SIGNATURE=signature)
     assert r1.status_code == 202
 
     # Segundo envio (mesmo external_event_id)
-    r2 = api_client.post("/api/v1/events/ingest", data=body, content_type="application/json", HTTP_X_SIGNATURE=signature)
+    r2 = api_client.post("/api/v1/events/ingest/", data=body, content_type="application/json", HTTP_X_SIGNATURE=signature)
     assert r2.status_code == 200
     assert r2.data["status"] == "duplicate"
 
@@ -99,14 +101,14 @@ def test_ingest_event_duplicate_idempotent(api_client, event_type_register, sett
 def test_ingest_meta_system_accepts_active_ingest_api_key(
     api_client,
     event_type_register,
+    workspace,
     settings,
 ):
     settings.WEBHOOK_META_SYSTEM_SECRET = "different_env_secret"
     ingest_api_key = "bcrm_sk_live_test_meta_system"
-    SystemSetting.objects.update_or_create(
-        pk=1,
-        defaults={"ingest_api_key": ingest_api_key},
-    )
+    ws_settings = workspace.settings_obj
+    ws_settings.ingest_api_key = ingest_api_key
+    ws_settings.save(update_fields=["ingest_api_key"])
 
     payload = {
         "event": "user.register",
@@ -134,6 +136,7 @@ def test_ingest_meta_system_accepts_active_ingest_api_key(
     assert response.status_code == 202
     assert response.data["status"] == "accepted"
     assert Event.objects.count() == 1
+    assert Event.objects.first().workspace_id == workspace.id
 
-    setting = SystemSetting.objects.get(pk=1)
-    assert setting.ingest_api_key_last_used_at is not None
+    ws_settings.refresh_from_db()
+    assert ws_settings.ingest_api_key_last_used_at is not None

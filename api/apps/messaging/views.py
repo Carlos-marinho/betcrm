@@ -18,6 +18,8 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.workspaces.scoping import WorkspaceScopedViewSet, resolve_workspace
+
 from .models import MessageLog, ProviderConfig, WebhookEvent
 from .providers import get_provider
 
@@ -74,10 +76,9 @@ class ProviderConfigSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProviderConfigViewSet(viewsets.ModelViewSet):
+class ProviderConfigViewSet(WorkspaceScopedViewSet, viewsets.ModelViewSet):
     queryset = ProviderConfig.objects.all().order_by("channel", "priority", "name")
     serializer_class = ProviderConfigSerializer
-    permission_classes = [IsAuthenticated]
     filterset_fields = ["channel", "is_active", "is_primary"]
 
 
@@ -99,10 +100,9 @@ class MessageLogSerializer(serializers.ModelSerializer):
         ]
 
 
-class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
+class MessageLogViewSet(WorkspaceScopedViewSet, viewsets.ReadOnlyModelViewSet):
     queryset = MessageLog.objects.select_related("profile", "provider").order_by("-created_at")
     serializer_class = MessageLogSerializer
-    permission_classes = [IsAuthenticated]
     filterset_fields = ["channel", "status"]
     search_fields = ["profile__external_id", "template_code", "recipient"]
 
@@ -129,9 +129,10 @@ def send_message(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    workspace = resolve_workspace(request)
     try:
         from apps.profiles.models import Profile
-        profile = Profile.objects.get(id=profile_id)
+        profile = Profile.objects.get(id=profile_id, workspace=workspace)
     except Profile.DoesNotExist:
         return Response({"error": "profile_not_found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -268,12 +269,13 @@ def messaging_stats(request):
     except (ValueError, TypeError):
         days = 7
 
+    workspace = resolve_workspace(request)
     now = timezone.now()
     today = now.date()
     period_start = now - timedelta(days=days)
 
     def _base_qs():
-        qs = MessageLog.objects.all()
+        qs = MessageLog.objects.filter(workspace=workspace)
         if channel:
             qs = qs.filter(channel=channel)
         return qs

@@ -18,6 +18,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.core.utils import is_quiet_hours, mask_email, mask_phone
+from apps.workspaces.config import resolve_config
 
 from .models import MessageLog, ProviderConfig
 from .providers import MessageContent, SendResult, get_provider
@@ -56,6 +57,11 @@ class MessagingService:
             bypass_quiet_hours: True só para mensagens transacionais críticas
             bypass_frequency_cap: True só para transacionais críticas
         """
+        # 0. Workspace + config efetiva (herança do principal resolvida aqui)
+        self._workspace = profile.workspace
+        self._cfg = resolve_config(self._workspace)
+        cfg = self._cfg
+
         # 1. Consentimento
         if not self._has_consent(profile, channel):
             self._log(profile, channel, template_code, "rejected", "no_consent", flow_execution_id, campaign_id)
@@ -66,8 +72,10 @@ class MessagingService:
             self._log(profile, channel, template_code, "rejected", "frequency_cap", flow_execution_id, campaign_id)
             return SendResult(success=False, error="frequency_cap")
 
-        # 3. Quiet hours
-        if not bypass_quiet_hours and is_quiet_hours():
+        # 3. Quiet hours (janela própria do workspace)
+        if not bypass_quiet_hours and is_quiet_hours(
+            start=cfg.quiet_hours_start, end=cfg.quiet_hours_end
+        ):
             self._log(profile, channel, template_code, "rejected", "quiet_hours", flow_execution_id, campaign_id)
             return SendResult(success=False, error="quiet_hours")
 
@@ -81,7 +89,9 @@ class MessagingService:
         from apps.templates.services import TemplateService
 
         try:
-            content = TemplateService.render(template_code, profile, channel, context)
+            content = TemplateService.render(
+                template_code, profile, channel, context, workspace=self._workspace
+            )
             content.campaign_id = campaign_id
             content.template_code = template_code
             content.profile_id = profile.id
@@ -93,11 +103,14 @@ class MessagingService:
             self._log(profile, channel, template_code, "failed", str(e), flow_execution_id, campaign_id)
             return SendResult(success=False, error=f"template_error: {e}")
 
-        # 6. Pegar providers ordenados por prioridade
+        # 6. Pegar providers ordenados por prioridade (do workspace-fonte: próprio
+        #    quando não herda, ou principal quando herda do principal)
         providers = list(
-            ProviderConfig.objects.filter(channel=channel, is_active=True).order_by(
-                "priority", "-is_primary"
-            )
+            ProviderConfig.objects.filter(
+                channel=channel,
+                is_active=True,
+                workspace_id=cfg.provider_workspace_id,
+            ).order_by("priority", "-is_primary")
         )
 
         if not providers:
@@ -112,7 +125,7 @@ class MessagingService:
         # MessageLog recebe seus próprios short-links de rastreio.
         from .tracking import should_track, wrap_links
 
-        track_clicks = should_track(channel)
+        track_clicks = should_track(channel, cfg)
         base_data = dict(content.data or {})
         base_body = content.body
 
@@ -136,6 +149,7 @@ class MessagingService:
                     body=base_body,
                     log=log,
                     flow_code=campaign_id,
+                    tracking_base_url=cfg.tracking_base_url,
                 )
 
             try:
@@ -173,10 +187,11 @@ class MessagingService:
         return getattr(profile, f"consent_{channel}", False)
 
     def _within_frequency_cap(self, profile, channel: str) -> bool:
+        cfg = getattr(self, "_cfg", None)
         cap = {
-            "email": settings.EMAIL_DAILY_CAP_PER_USER,
-            "sms": settings.SMS_DAILY_CAP_PER_USER,
-            "push": settings.PUSH_DAILY_CAP_PER_USER,
+            "email": cfg.email_daily_cap if cfg else settings.EMAIL_DAILY_CAP_PER_USER,
+            "sms": cfg.sms_daily_cap if cfg else settings.SMS_DAILY_CAP_PER_USER,
+            "push": cfg.push_daily_cap if cfg else settings.PUSH_DAILY_CAP_PER_USER,
         }.get(channel, 1)
 
         today_start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -203,7 +218,9 @@ class MessagingService:
         return mask_phone(recipient)
 
     def _create_log(self, **kwargs) -> MessageLog:
-        return MessageLog.objects.create(status="queued", **kwargs)
+        return MessageLog.objects.create(
+            status="queued", workspace=self._workspace, **kwargs
+        )
 
     def _is_allowed_from_email(self, providers: list[ProviderConfig], from_email: str) -> bool:
         selected = from_email.strip().lower()
@@ -247,6 +264,7 @@ class MessagingService:
     def _log(self, profile, channel: str, template_code: str, status: str, reason: str, flow_id, campaign_id: str):
         """Log rápido para mensagens rejeitadas antes de enviar."""
         MessageLog.objects.create(
+            workspace=getattr(self, "_workspace", None) or profile.workspace,
             profile=profile,
             channel=channel,
             recipient="",

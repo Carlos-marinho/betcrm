@@ -86,17 +86,25 @@ class TemplateService:
         profile,
         channel: str,
         extra_context: dict | None = None,
+        workspace=None,
     ) -> MessageContent:
         """
         Renderiza um template para um profile.
 
-        Retorna MessageContent pronto para envio.
+        Retorna MessageContent pronto para envio. O workspace (próprio do profile,
+        ou explícito em previews) define escopo de templates/cupons/assets e a
+        config efetiva de branding/URLs (com herança do principal).
         """
+        from apps.workspaces.config import resolve_config
+
+        workspace = workspace or profile.workspace
+        cfg = resolve_config(workspace)
+
         # Resolve template: pode ser um A/B test
-        template = cls._resolve_template(template_code, profile)
+        template = cls._resolve_template(template_code, profile, workspace)
 
         # Monta contexto
-        context = cls._build_context(profile, extra_context)
+        context = cls._build_context(profile, extra_context, cfg, workspace)
 
         env = cls.get_env()
 
@@ -108,17 +116,17 @@ class TemplateService:
 
         if channel == "email":
             # Adiciona URLs de assets ao contexto
-            context.update(cls._build_asset_context(template))
+            context.update(cls._build_asset_context(template, cfg, workspace))
 
             content.subject = env.from_string(template.subject or "").render(**context)
             content.html = env.from_string(template.html_body or "").render(**context)
             content.text = env.from_string(template.text_body or "").render(**context)
-            content.from_email = template.from_email or ""
-            content.from_name = template.from_name or ""
+            content.from_email = template.from_email or cfg.from_email or ""
+            content.from_name = template.from_name or cfg.from_name or ""
 
             # Injeta unsubscribe se template marketing
             if template.include_unsubscribe and template.category == "marketing":
-                unsub_url = cls._build_unsubscribe_url(profile)
+                unsub_url = cls._build_unsubscribe_url(profile, cfg, workspace)
                 if "{{ unsubscribe_url }}" not in template.html_body:
                     footer_logo_url = context.get("footer_logo_url", "")
                     content.html = cls._inject_unsubscribe_footer(
@@ -131,10 +139,12 @@ class TemplateService:
         return content
 
     @classmethod
-    def _resolve_template(cls, template_code: str, profile) -> MessageTemplate:
+    def _resolve_template(cls, template_code: str, profile, workspace) -> MessageTemplate:
         """Resolve template — pode trocar por variante se houver A/B ativo."""
         try:
-            template = MessageTemplate.objects.get(code=template_code, is_active=True)
+            template = MessageTemplate.objects.get(
+                code=template_code, is_active=True, workspace=workspace
+            )
         except MessageTemplate.DoesNotExist as e:
             raise ValueError(f"Template '{template_code}' não encontrado ou inativo") from e
 
@@ -143,6 +153,7 @@ class TemplateService:
             AbTest.objects.filter(
                 is_active=True,
                 variants__template=template,
+                workspace=workspace,
             )
             .prefetch_related("variants__template")
             .first()
@@ -165,7 +176,7 @@ class TemplateService:
         return template
 
     @classmethod
-    def _resolve_bonus_code(cls, extra: dict | None) -> str:
+    def _resolve_bonus_code(cls, extra: dict | None, workspace) -> str:
         """Resolve bonus_code: valor direto > DB (com cache Redis 60s) > vazio."""
         if not extra:
             return ""
@@ -178,13 +189,13 @@ class TemplateService:
         from django.core.cache import cache
         from .models import CampaignCoupon
 
-        cache_key = f"campaign_coupon:{key}"
+        cache_key = f"campaign_coupon:{workspace.id}:{key}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         try:
-            coupon = CampaignCoupon.objects.get(key=key)
+            coupon = CampaignCoupon.objects.get(key=key, workspace=workspace)
             code = coupon.code if coupon.is_valid else ""
         except CampaignCoupon.DoesNotExist:
             code = ""
@@ -193,12 +204,12 @@ class TemplateService:
         return code
 
     @classmethod
-    def _build_context(cls, profile, extra: dict | None) -> dict:
+    def _build_context(cls, profile, extra: dict | None, cfg, workspace) -> dict:
         """Monta o contexto de variáveis disponíveis para o template."""
         _extra = extra or {}
         return {
             # Cupom de bônus — resolvido de settings via bonus_code_key ou passado direto
-            "bonus_code": cls._resolve_bonus_code(_extra),
+            "bonus_code": cls._resolve_bonus_code(_extra, workspace),
             # Profile básico
             "first_name": profile.first_name or "jogador",
             "last_name": profile.last_name or "",
@@ -224,11 +235,11 @@ class TemplateService:
             "is_slots_player": profile.has_tag("SLOTS_PLAYER"),
             "is_crash_player": profile.has_tag("CRASH_PLAYER"),
             "is_live_player": profile.has_tag("LIVE_PLAYER"),
-            # URLs úteis
-            "site_url": getattr(settings, "PUBLIC_SITE_URL", "https://yourdomain.com"),
-            "deposit_url": getattr(settings, "DEPOSIT_URL", "https://yourdomain.com/depositar"),
-            "support_url": getattr(settings, "SUPPORT_URL", "https://yourdomain.com/suporte"),
-            "unsubscribe_url": cls._build_unsubscribe_url(profile),
+            # URLs úteis (resolvidas pela config do workspace)
+            "site_url": cfg.public_site_url,
+            "deposit_url": cfg.deposit_url,
+            "support_url": cfg.support_url,
+            "unsubscribe_url": cls._build_unsubscribe_url(profile, cfg, workspace),
             # Extra (do fluxo / evento) — pode sobrescrever qualquer variável acima
             **_extra,
         }
@@ -272,7 +283,7 @@ class TemplateService:
         return str(value)
 
     @classmethod
-    def _build_asset_context(cls, template: MessageTemplate) -> dict:
+    def _build_asset_context(cls, template: MessageTemplate, cfg=None, workspace=None) -> dict:
         """
         Monta URLs absolutas de assets para injeção no contexto Jinja2.
 
@@ -302,25 +313,33 @@ class TemplateService:
         if template.banner_asset_id and template.banner_asset and template.banner_asset.file:
             banner_url = _abs(template.banner_asset.file.url)
 
-        global_footer = EmailAsset.objects.filter(is_global_footer=True, is_active=True).first()
+        assets = EmailAsset.objects.filter(is_active=True)
+        if workspace is not None:
+            assets = assets.filter(workspace=workspace)
+
+        global_footer = assets.filter(is_global_footer=True).first()
         footer_logo_url = _abs(global_footer.file.url if global_footer and global_footer.file else "")
 
-        brand_logo = (
-            EmailAsset.objects.filter(asset_type="logo", is_active=True)
-            .order_by("-created_at")
-            .first()
-        )
+        # Logo da marca: usa o logo_asset configurado no workspace, ou cai no
+        # asset_type="logo" mais recente do workspace.
+        brand_logo = None
+        if cfg is not None and getattr(cfg, "logo_asset_id", None):
+            brand_logo = assets.filter(id=cfg.logo_asset_id).first()
+        if brand_logo is None:
+            brand_logo = assets.filter(asset_type="logo").order_by("-created_at").first()
         brand_logo_url = _abs(brand_logo.file.url if brand_logo and brand_logo.file else "")
+
+        brand_name = cfg.brand_name if cfg is not None else getattr(settings, "BRAND_NAME", "MARCA")
 
         return {
             "banner_url": banner_url,
             "footer_logo_url": footer_logo_url,
             "brand_logo_url": brand_logo_url,
-            "brand_name": getattr(settings, "BRAND_NAME", "MARCA"),
+            "brand_name": brand_name,
         }
 
     @classmethod
-    def _build_unsubscribe_url(cls, profile) -> str:
+    def _build_unsubscribe_url(cls, profile, cfg=None, workspace=None) -> str:
         """Constrói URL única de unsubscribe para o profile."""
         import hashlib
         from urllib.parse import quote
@@ -329,10 +348,17 @@ class TemplateService:
             f"{profile.external_id}{settings.SECRET_KEY}".encode()
         ).hexdigest()[:32]
 
-        base = settings.DEFAULT_UNSUBSCRIBE_URL if hasattr(settings, "DEFAULT_UNSUBSCRIBE_URL") else "https://yourdomain.com/unsubscribe"
+        if cfg is not None:
+            base = cfg.unsubscribe_url
+        else:
+            base = getattr(settings, "DEFAULT_UNSUBSCRIBE_URL", "https://yourdomain.com/unsubscribe")
         # quote() garante que external_id com caracteres especiais não quebre URL ou HTML
         safe_id = quote(str(profile.external_id), safe="")
-        return f"{base}?token={token}&id={safe_id}"
+        # ?ws=<id> desambigua o profile quando o mesmo external_id existe em
+        # workspaces diferentes (ver apps.compliance.views.unsubscribe).
+        ws_id = workspace.id if workspace is not None else getattr(profile, "workspace_id", None)
+        ws_param = f"&ws={ws_id}" if ws_id else ""
+        return f"{base}?token={token}&id={safe_id}{ws_param}"
 
     @classmethod
     def _inject_unsubscribe_footer(cls, html: str, unsub_url: str, footer_logo_url: str = "") -> str:

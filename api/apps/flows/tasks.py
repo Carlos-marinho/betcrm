@@ -87,11 +87,12 @@ def evaluate_flow_triggers(event_id: int, profile_id: int):
 
     event_code = event.event_type.code
 
-    # 1. Disparar novos fluxos
+    # 1. Disparar novos fluxos (apenas do workspace do evento)
     triggered_flows = Flow.objects.filter(
         is_active=True,
         trigger_type="event",
         trigger_config__event_code=event_code,
+        workspace_id=event.workspace_id,
     )
 
     for flow in triggered_flows:
@@ -137,6 +138,7 @@ def evaluate_segment_entry_flows():
     polling: perfis que pertencem ao segmento entram no fluxo se ainda não
     estiverem ativos e se as regras de reentrada permitirem.
     """
+    from apps.profiles.models import Profile
     from apps.segments.engine import SegmentEngine
     from apps.segments.models import Segment
 
@@ -149,13 +151,18 @@ def evaluate_segment_entry_flows():
             continue
 
         try:
-            segment = Segment.objects.get(code=segment_code, is_active=True)
+            segment = Segment.objects.get(
+                code=segment_code, is_active=True, workspace_id=flow.workspace_id
+            )
         except Segment.DoesNotExist:
             logger.warning("Segment %s not found for flow %s", segment_code, flow.code)
             continue
 
         try:
-            profiles = SegmentEngine.evaluate(segment.rules).only("id")
+            base_qs = Profile.objects.filter(
+                is_deleted=False, workspace_id=flow.workspace_id
+            )
+            profiles = SegmentEngine.evaluate(segment.rules, base_qs=base_qs).only("id")
         except Exception:
             logger.exception("Error evaluating segment %s for flow %s", segment_code, flow.code)
             continue
@@ -187,7 +194,9 @@ def evaluate_scheduled_flows():
         logger.info("Fluxo agendado %s será executado agora", flow.code)
 
         from .models import FlowScheduleRun
-        run = FlowScheduleRun.objects.create(flow=flow, run_at=now)
+        run = FlowScheduleRun.objects.create(
+            workspace_id=flow.workspace_id, flow=flow, run_at=now
+        )
 
         _enroll_scheduled_audience.delay(flow.id, run.id)
 
@@ -223,7 +232,9 @@ def _enroll_scheduled_audience(flow_id: int, schedule_run_id: int):
                 run.save(update_fields=["status", "error_message"])
                 return
             try:
-                segment = Segment.objects.get(code=segment_code, is_active=True)
+                segment = Segment.objects.get(
+                    code=segment_code, is_active=True, workspace_id=flow.workspace_id
+                )
             except Segment.DoesNotExist:
                 logger.warning("Segmento %s não encontrado para fluxo %s", segment_code, flow.code)
                 run.status = "failed"
@@ -231,7 +242,10 @@ def _enroll_scheduled_audience(flow_id: int, schedule_run_id: int):
                 run.save(update_fields=["status", "error_message"])
                 return
             try:
-                profiles = SegmentEngine.evaluate(segment.rules).only("id")
+                base_qs = Profile.objects.filter(
+                    is_deleted=False, workspace_id=flow.workspace_id
+                )
+                profiles = SegmentEngine.evaluate(segment.rules, base_qs=base_qs).only("id")
             except Exception as exc:
                 logger.exception("Erro ao avaliar segmento %s para fluxo %s", segment_code, flow.code)
                 run.status = "failed"
@@ -239,7 +253,9 @@ def _enroll_scheduled_audience(flow_id: int, schedule_run_id: int):
                 run.save(update_fields=["status", "error_message"])
                 return
         else:
-            profiles = Profile.objects.filter(is_deleted=False).only("id")
+            profiles = Profile.objects.filter(
+                is_deleted=False, workspace_id=flow.workspace_id
+            ).only("id")
 
         # Taxa de envio configurável — default 120/min (2 por segundo).
         # Garante que execuções não disparem todas de uma vez.
@@ -404,6 +420,7 @@ def _try_enroll(
     from datetime import timedelta
 
     FlowExecution.objects.create(
+        workspace_id=flow.workspace_id,
         flow=flow,
         profile_id=profile_id,
         current_node_id="start",
