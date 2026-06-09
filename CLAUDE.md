@@ -250,6 +250,26 @@ make warmup DAY=1   # Roda warm-up day N
 - Descrição: o que, por quê, como testar
 - Sempre incluir test ou justificar ausência
 
+## 🤖 MCP do BetCRM (operar fluxos/campanhas via Claude)
+
+Há um MCP server próprio em `mcp/betcrm/` que envelopa a API REST e permite montar
+fluxos, templates e campanhas em linguagem natural pelo Claude Code, incluindo
+subir artes do Google Drive direto nos assets de email.
+
+- **Registro:** `.mcp.json` na raiz (transporte stdio via `uv run`, deps efêmeras).
+- **Config:** `cp mcp/betcrm/.env.example mcp/betcrm/.env` e preencher
+  `BETCRM_API_URL` (dev local ou URL de prod), `BETCRM_USERNAME`/`BETCRM_PASSWORD`
+  (usuário de serviço admin/member) e, opcional, `BETCRM_WORKSPACE_ID`.
+- **Deploy:** roda **local** (no laptop) e fala com a API via JWT — apontar
+  `BETCRM_API_URL` pra prod basta; nada precisa ser hospedado no servidor.
+- **Google Drive:** link público funciona out-of-the-box; arquivos privados
+  exigem `GOOGLE_SERVICE_ACCOUNT_FILE` (JSON em `secrets/`, pasta compartilhada
+  com a service account).
+- **Escopo (importante): compor + revisar.** Cria/edita templates, sobe assets e
+  monta fluxos como **rascunho** + preview. **Não ativa fluxos nem dispara envio**
+  — `update_flow` recusa `is_active=true`. Ir ao ar é manual, no painel.
+- Detalhes e lista de ferramentas: `mcp/betcrm/README.md`.
+
 ## 📚 Links importantes
 
 - Postal docs: https://docs.postalserver.io/

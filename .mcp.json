@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "betcrm": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-project",
+        "--with", "mcp",
+        "--with", "httpx",
+        "--with", "google-api-python-client",
+        "--with", "google-auth",
+        "python",
+        "mcp/betcrm/server.py"
+      ]
+    }
+  }
+}
