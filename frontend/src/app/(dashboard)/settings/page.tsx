@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,7 +23,7 @@ import {
   ExternalLink, Database, Zap, Radio, Shield, Key, Webhook,
   Bell, Globe, CheckCircle, Copy, RefreshCw, Plus, Pencil, Trash2,
   Mail, MessageSquare, Smartphone, Server, Lock, AlertTriangle,
-  Loader2, FileDown, UserX, Eye, EyeOff, Clock,
+  Loader2, FileDown, UserX, Eye, EyeOff, Clock, Building2, ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -892,6 +893,22 @@ export default function SettingsPage() {
             Ferramentas administrativas, provedores de mensagem e compliance
           </p>
         </div>
+
+        <Link
+          href="/settings/workspaces"
+          className="card-vault p-4 flex items-center gap-3 group hover:border-gold/25 transition-all"
+        >
+          <div className="w-9 h-9 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0 text-gold">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-sm text-foreground">Workspaces</span>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Gerencie ambientes isolados, configuração própria/herdada e membros
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-gold transition-colors" />
+        </Link>
 
         <Tabs defaultValue="system">
           <TabsList>

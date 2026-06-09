@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { clearToken } from "@/lib/auth";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+import { useWorkspaceStore } from "@/stores/workspace";
 import {
   LayoutDashboard,
   Users,
@@ -63,6 +65,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   function handleLogout() {
     clearToken();
+    useWorkspaceStore.getState().reset();
     router.push("/login");
   }
 
@@ -86,6 +89,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
         </div>
+
+        {/* Workspace switcher */}
+        <WorkspaceSwitcher />
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

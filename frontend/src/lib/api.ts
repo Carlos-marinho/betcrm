@@ -1,5 +1,11 @@
 import axios from "axios";
-import { clearToken, getRefreshToken, getToken, setToken } from "./auth";
+import {
+  clearToken,
+  getActiveWorkspaceId,
+  getRefreshToken,
+  getToken,
+  setToken,
+} from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 let refreshPromise: Promise<string> | null = null;
@@ -13,6 +19,8 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const workspaceId = getActiveWorkspaceId();
+  if (workspaceId) config.headers["X-Workspace-Id"] = workspaceId;
   return config;
 });
 
