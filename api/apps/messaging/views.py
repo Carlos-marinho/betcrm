@@ -118,17 +118,16 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
             )
         from .tasks import retry_failed_messages
 
-        # Síncrono: a decisão (dedup/já-entregue) é rápida; o envio em si é async.
-        result = retry_failed_messages(message_log_ids=[log.id])
-        return Response(result)
+        retry_failed_messages.delay(message_log_ids=[log.id])
+        return Response({"status": "queued"}, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=["post"], url_path="retry-failed")
     def retry_failed(self, request):
-        """Reenfileira mensagens com falha. POST .../logs/retry-failed/
+        """Reenfileira mensagens com falha (assíncrono). POST .../logs/retry-failed/
 
         Body: {"ids": [...]} para logs específicos, ou {"all": true, "channel"?:
-        "email"} para todos os falhados. Deduplica por destinatário (nunca
-        manda email repetido). Retorna {requeued, skipped}.
+        "email"} para todos os falhados. O reprocessamento roda no Celery e
+        deduplica por destinatário (nunca manda email repetido).
         """
         from .tasks import retry_failed_messages
 
@@ -136,11 +135,13 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
         if ids:
             if not isinstance(ids, list):
                 return Response({"error": "ids deve ser uma lista"}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(retry_failed_messages(message_log_ids=ids))
+            retry_failed_messages.delay(message_log_ids=ids)
+            return Response({"status": "queued"}, status=status.HTTP_202_ACCEPTED)
 
         if request.data.get("all"):
             channel = request.data.get("channel") or None
-            return Response(retry_failed_messages(retry_all=True, channel=channel))
+            retry_failed_messages.delay(retry_all=True, channel=channel)
+            return Response({"status": "queued"}, status=status.HTTP_202_ACCEPTED)
 
         return Response(
             {"error": "informe 'ids' (lista) ou 'all': true"},
