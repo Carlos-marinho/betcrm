@@ -626,6 +626,8 @@ export interface MessageLog {
   body_preview: string;
   recipient: string;
   provider_name: string | null;
+  error_message: string;
+  retry_count: number;
   sent_at: string | null;
   delivered_at: string | null;
   opened_at: string | null;
@@ -891,6 +893,19 @@ export function useSendMessage() {
     mutationFn: async (payload: SendMessagePayload) => {
       const { data } = await api.post("/messaging/send/", payload);
       return data as { status: string; message_id?: string; error?: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+    },
+  });
+}
+
+export function useRetryMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { data } = await api.post(`/messaging/logs/${id}/retry/`);
+      return data as { status: string; id: number };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
