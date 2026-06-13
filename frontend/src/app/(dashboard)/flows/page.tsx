@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useFlowExecutions, useSegments,
+  useFlows, useToggleFlow, useCreateFlow, useUpdateFlow, useDeleteFlow, useFlowExecutions, useSegments,
   useFlowScheduleRuns, useFlowsSummary,
   type Flow, type ScheduleConfig, type FlowSummaryEntry,
 } from "@/lib/hooks";
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Workflow, Play, Pause, Plus, Pencil, Activity, CheckCircle2,
   XCircle, AlertTriangle, Clock, Zap, LayoutGrid, CalendarClock, Users, Calendar,
-  Send, MailOpen, MousePointerClick, Target,
+  Send, MailOpen, MousePointerClick, Target, Search, Trash2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -754,6 +754,61 @@ function ScheduleLastRun({ flow }: { flow: Flow }) {
   );
 }
 
+// ── DeleteFlowDialog ──────────────────────────────────────────────────────────
+
+function DeleteFlowDialog({ flow, onClose }: { flow: Flow | null; onClose: () => void }) {
+  const deleteMutation = useDeleteFlow();
+
+  async function handleConfirm() {
+    if (!flow) return;
+    try {
+      await deleteMutation.mutateAsync(flow.id);
+      toast.success("Fluxo excluído");
+      onClose();
+    } catch {
+      toast.error("Erro ao excluir fluxo");
+    }
+  }
+
+  return (
+    <Dialog open={!!flow} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Excluir fluxo</DialogTitle>
+          <DialogDescription>
+            Tem certeza que deseja excluir <span className="font-medium text-foreground">{flow?.name}</span>?
+            Esta ação é permanente e não pode ser desfeita.
+          </DialogDescription>
+        </DialogHeader>
+        {flow?.is_active && (
+          <p className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Este fluxo está ativo. Considere pausá-lo antes de excluir.
+          </p>
+        )}
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 border border-border transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={deleteMutation.isPending}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-destructive text-white hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {deleteMutation.isPending ? "Excluindo..." : "Excluir fluxo"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── FlowsPage ─────────────────────────────────────────────────────────────────
 
 // Métricas compactas exibidas em cada card da listagem.
@@ -802,10 +857,22 @@ export default function FlowsPage() {
   const toggle = useToggleFlow();
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Flow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Flow | null>(null);
   const [tab, setTab] = useState("flows");
   const [stateFilter, setStateFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   const { data: executions, isLoading: execLoading } = useFlowExecutions({ state: stateFilter || undefined });
+
+  const query = search.trim().toLowerCase();
+  const filteredFlows = query
+    ? (data?.results ?? []).filter(
+        (f) =>
+          f.name.toLowerCase().includes(query) ||
+          f.code.toLowerCase().includes(query) ||
+          (f.description ?? "").toLowerCase().includes(query)
+      )
+    : data?.results ?? [];
 
   async function handleToggle(id: number, currentlyActive: boolean) {
     try {
@@ -873,6 +940,19 @@ export default function FlowsPage() {
           {/* ── FLOWS TAB ── */}
           {tab === "flows" && (
             <>
+              {!isLoading && data && data.results.length > 0 && (
+                <div className="relative mb-4 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar por nome, código ou descrição..."
+                    className="pl-9"
+                  />
+                </div>
+              )}
+
               {isLoading && (
                 <div className="grid gap-3">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -903,9 +983,19 @@ export default function FlowsPage() {
                 </div>
               )}
 
-              {!isLoading && data && (
+              {!isLoading && data && data.results.length > 0 && filteredFlows.length === 0 && (
+                <div className="card-vault p-12 text-center">
+                  <Search className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Nenhum fluxo encontrado</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nada corresponde a <span className="font-medium text-foreground">“{search}”</span>.
+                  </p>
+                </div>
+              )}
+
+              {!isLoading && data && filteredFlows.length > 0 && (
                 <div className="grid gap-3 animate-fade-up">
-                  {data.results.map((flow) => (
+                  {filteredFlows.map((flow) => (
                     <div
                       key={flow.id}
                       className="card-vault p-4 flex items-center gap-4 hover:border-gold/20 transition-all group"
@@ -951,6 +1041,13 @@ export default function FlowsPage() {
                           title="Editar metadados"
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(flow)}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                          title="Excluir fluxo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         <Link
                           href={`/flows/${flow.id}`}
@@ -1082,6 +1179,8 @@ export default function FlowsPage() {
         onClose={() => { setModalOpen(false); setEditTarget(null); }}
         flow={editTarget}
       />
+
+      <DeleteFlowDialog flow={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </>
   );
 }

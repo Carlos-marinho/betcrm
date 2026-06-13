@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cross-sell Copa — Brasil x Marrocos</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
+<!-- pré-header oculto -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ preheader|default('R$ 25 em aposta grátis pro jogo do Brasil. Sem risco pra testar.') }}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
+<tr><td align="center" style="padding:0;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#111111;border-radius:{%- if banner_url %}0 0 20px 20px{%- else %}20px{%- endif %};overflow:hidden;border:1px solid #1e1e1e;">
+
+  {%- if not banner_url %}
+  <!-- top accent -->
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#00A859,#FFD700,#00A859,transparent);font-size:0;">&nbsp;</td></tr>
+  {%- endif %}
+
+  <!-- banner: vinculado via painel → TemplateService injeta banner_url -->
+  <tr><td style="padding:0;line-height:0;font-size:0;vertical-align:top;">
+    {%- if banner_url %}
+    <img src="{{ banner_url }}" width="600" alt="Brasil x Marrocos — Copa" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+    {%- endif %}
+  </td></tr>
+
+  {%- if not banner_url %}
+  <!-- logo / marca -->
+  <tr><td align="center" style="padding:16px 32px 14px;background-color:#0d0d0d;">
+    {%- if brand_logo_url %}
+    <a href="{{ site_url }}" style="text-decoration:none;display:block;text-align:center;">
+      <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" height="36" style="display:inline-block;height:36px;width:auto;max-width:220px;border:0;">
+    </a>
+    {%- else %}
+    <span style="font-size:18px;font-weight:900;letter-spacing:4px;color:#FFD700;text-transform:uppercase;">{{ brand_name }}</span>
+    {%- endif %}
+  </td></tr>
+  {%- endif %}
+
+  <!-- headline -->
+  <tr><td align="center" style="padding:34px 44px 8px;">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#00C853;">⚽ Hoje tem Brasil na Copa</p>
+    <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;line-height:1.2;text-align:center;">
+      {{ headline|default('Experimenta apostar no Brasil — por nossa conta, ' ~ first_name ~ '. 🇧🇷') }}
+    </h1>
+  </td></tr>
+
+  <tr><td align="center" style="padding:12px 48px 26px;">
+    <p style="margin:0;color:#999999;font-size:15px;line-height:1.65;text-align:center;">
+      {{ subheadline|default('Você curte nossos jogos. Hoje tem Copa: deposite, ganhe R$ 25 de aposta grátis e veja como é torcer apostando. Sem complicação.') }}
+    </p>
+  </td></tr>
+
+  <!-- match card: Brasil x Marrocos -->
+  <tr><td style="padding:0 40px 26px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#0a1f14,#06120c);border-radius:14px;border:1px solid #11402a;overflow:hidden;">
+      <tr><td style="height:2px;background:linear-gradient(90deg,transparent,#00C853,transparent);font-size:0;">&nbsp;</td></tr>
+      <tr><td style="padding:18px 20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+          <td width="40%" align="center" style="vertical-align:middle;">
+            <p style="margin:0;font-size:40px;line-height:1;">🇧🇷</p>
+            <p style="margin:8px 0 0;font-size:13px;font-weight:700;color:#fff;">Brasil</p>
+          </td>
+          <td width="20%" align="center" style="vertical-align:middle;">
+            <p style="margin:0;font-size:13px;font-weight:900;color:#00C853;letter-spacing:1px;">VS</p>
+            <p style="margin:6px 0 0;font-size:11px;color:#6b6b6b;">{{ kickoff_time|default('hoje') }}</p>
+          </td>
+          <td width="40%" align="center" style="vertical-align:middle;">
+            <p style="margin:0;font-size:40px;line-height:1;">🇲🇦</p>
+            <p style="margin:8px 0 0;font-size:13px;font-weight:700;color:#fff;">Marrocos</p>
+          </td>
+        </tr></table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- highlight: cupom + aposta grátis -->
+  <tr><td style="padding:0 40px 28px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,#1a1400,#2b1f00);border-radius:14px;border:1px solid #3a2b00;overflow:hidden;">
+      <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#FFD700,transparent);font-size:0;">&nbsp;</td></tr>
+      <tr><td align="center" style="padding:26px 24px 22px;">
+        <p style="margin:0 0 6px;color:#886e00;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;">Sua aposta grátis de hoje</p>
+        <p style="margin:0;color:#FFD700;font-size:46px;font-weight:900;line-height:1;">{{ freebet_amount|default('R$ 25') }}</p>
+        <p style="margin:8px 0 0;color:#b8920a;font-size:14px;font-weight:600;">em aposta grátis ao depositar {{ min_deposit|default('R$ 50') }} ou mais</p>
+        <!-- cupom -->
+        <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:18px auto 0;"><tr>
+          <td style="border:1.5px dashed #FFD700;border-radius:10px;background:#0d0a00;padding:12px 26px;">
+            <p style="margin:0 0 2px;font-size:10px;color:#886e00;letter-spacing:2px;text-transform:uppercase;">Cupom</p>
+            <p style="margin:0;font-size:22px;font-weight:900;letter-spacing:4px;color:#FFD700;">{{ coupon_code|default('COPA25') }}</p>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#3a2b00,transparent);font-size:0;">&nbsp;</td></tr>
+    </table>
+  </td></tr>
+
+  <!-- como funciona: 3 passos -->
+  <tr><td style="padding:0 40px 26px;">
+    <p style="margin:0 0 14px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#555;">Como garantir</p>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td width="33%" style="padding:0 5px 0 0;vertical-align:top;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+            <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:34px;line-height:1;">💰</p></td></tr>
+            <tr><td style="padding:10px 8px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">1. Deposite</p><p style="margin:0;font-size:10px;color:#777;text-align:center;line-height:1.4;">{{ min_deposit|default('R$ 50') }}+ com o cupom</p></td></tr>
+          </table>
+        </td>
+        <td width="33%" style="padding:0 2px 0 3px;vertical-align:top;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+            <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:34px;line-height:1;">🎁</p></td></tr>
+            <tr><td style="padding:10px 8px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">2. Receba</p><p style="margin:0;font-size:10px;color:#777;text-align:center;line-height:1.4;">{{ freebet_amount|default('R$ 25') }} em aposta grátis</p></td></tr>
+          </table>
+        </td>
+        <td width="33%" style="padding:0 0 0 5px;vertical-align:top;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#141414;border-radius:12px;border:1px solid #1e1e1e;overflow:hidden;">
+            <tr><td align="center" style="background:linear-gradient(160deg,#1c1800,#241e00);padding:16px 4px 12px;"><p style="margin:0;font-size:34px;line-height:1;">⚽</p></td></tr>
+            <tr><td style="padding:10px 8px 14px;"><p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#fff;text-align:center;">3. Aposte</p><p style="margin:0;font-size:10px;color:#777;text-align:center;line-height:1.4;">no Brasil x Marrocos</p></td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- urgência: até o apito -->
+  <tr><td style="padding:0 40px 26px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#150800;border-radius:10px;border:1px solid #3d1500;overflow:hidden;">
+      <tr><td style="height:2px;background:linear-gradient(90deg,#FF6B00,#FF3300,#FF6B00);font-size:0;">&nbsp;</td></tr>
+      <tr><td align="center" style="padding:13px 20px;">
+        <p style="margin:0;font-size:13px;font-weight:700;color:#FF7A3D;">⏳ Vale só até o apito inicial{%- if kickoff_time %}, às {{ kickoff_time }} de hoje{%- endif %}. Garanta antes de começar.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td align="center" style="padding:4px 40px 30px;">
+    <a href="{{ cta_url|default('https://betnice.bet/sports/soccer/international/world-cup/brazil-morocco-2609327863110971392?bt-path=%2Fsoccer%2Finternational%2Fworld-cup%2Fbrazil-morocco-2609327863110971392') }}" style="display:inline-block;padding:17px 48px;background:linear-gradient(135deg,#FFD700,#FF8C00);color:#000;text-decoration:none;font-weight:800;font-size:13px;border-radius:10px;letter-spacing:2px;text-transform:uppercase;">
+      Depositar e Garantir Aposta Grátis
+    </a>
+    <p style="margin:14px 0 0;font-size:11px;color:#555;">Cupom <strong style="color:#999;">{{ coupon_code|default('COPA25') }}</strong> · dep. mín. {{ min_deposit|default('R$ 50') }} · válido só hoje</p>
+  </td></tr>
+
+  <!-- divider -->
+  <tr><td style="padding:0 40px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="height:1px;background:linear-gradient(90deg,transparent,#222,transparent);font-size:0;">&nbsp;</td></tr></table></td></tr>
+
+  <!-- footer -->
+  <tr><td style="padding:18px 40px 22px;text-align:center;">
+    <p style="margin:0 0 8px;font-size:10px;color:#444;line-height:1.5;">Aposta grátis creditada após depósito com o cupom. O valor da aposta grátis não retorna junto com os ganhos. Sujeito aos termos da promoção. Oferta válida apenas no dia do jogo.</p>
+    <p style="margin:0 0 6px;font-size:11px;color:#3d3d3d;">
+      <a href="{{ unsubscribe_url }}" style="color:#3d3d3d;text-decoration:underline;">Cancelar emails promocionais</a>
+    </p>
+    <p style="margin:0;font-size:10px;color:#2a2a2a;">Jogo responsável: aposte com moderação. +18.</p>
+  </td></tr>
+
+  <!-- bottom accent -->
+  <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#00A859,#FFD700,#00A859,transparent);font-size:0;">&nbsp;</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

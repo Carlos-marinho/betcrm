@@ -22,6 +22,7 @@ interface FlowCanvasProps {
   nodes: FlowNode[];
   connections: Connection[];
   selectedNodeId: string | null;
+  nodeCounts?: Record<string, number>;
   onNodesChange: (nodes: FlowNode[]) => void;
   onConnectionsChange: (connections: Connection[]) => void;
   onSelectNode: (id: string | null) => void;
@@ -31,6 +32,7 @@ export function FlowCanvas({
   nodes,
   connections,
   selectedNodeId,
+  nodeCounts,
   onNodesChange,
   onConnectionsChange,
   onSelectNode,
@@ -450,6 +452,7 @@ export function FlowCanvas({
               isSelected={selectedNodeId === node.id}
               isConnectingMode={!!connectingFrom}
               isConnectingSource={connectingFrom?.nodeId === node.id}
+              liveCount={nodeCounts?.[node.id]}
               onMouseDown={(e) => handleNodeDragStart(node.id, e)}
               onPortClick={(port, e) => handlePortClick(node.id, port, e)}
               onNodeClick={(e) => handleNodeClick(node.id, e)}

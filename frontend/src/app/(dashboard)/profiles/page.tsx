@@ -2,10 +2,10 @@
 
 import { useState, useRef } from "react";
 import { ImportProfilesModal } from "@/components/features/profiles/ImportProfilesModal";
-import { useProfiles, type ProfileFilters } from "@/lib/hooks";
+import { useProfiles, useProfileTags, type ProfileFilters } from "@/lib/hooks";
 import {
   Search, ChevronLeft, ChevronRight, ExternalLink, Upload,
-  SlidersHorizontal, X, ArrowUpDown, ChevronDown,
+  SlidersHorizontal, X, ArrowUpDown, ChevronDown, Tag,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -61,7 +61,16 @@ export default function ProfilesPage() {
   const [profileType, setProfileType] = useState<TypeFilter>("");
   const [ltvMin, setLtvMin] = useState("");
   const [ltvMax, setLtvMax] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagsMatch, setTagsMatch] = useState<"all" | "any">("all");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: availableTags } = useProfileTags();
+
+  function toggleTag(tag: string) {
+    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    setPage(1);
+  }
 
   function handleSearch(val: string) {
     setSearch(val);
@@ -76,6 +85,7 @@ export default function ProfilesPage() {
     setProfileType("");
     setLtvMin("");
     setLtvMax("");
+    setTags([]);
     setPage(1);
   }
 
@@ -85,6 +95,7 @@ export default function ProfilesPage() {
     profileType !== "",
     ltvMin !== "",
     ltvMax !== "",
+    tags.length > 0,
   ].filter(Boolean).length;
 
   const filters: ProfileFilters = {
@@ -96,6 +107,8 @@ export default function ProfilesPage() {
     profile_type: profileType,
     ltv_min: ltvMin,
     ltv_max: ltvMax,
+    tags,
+    tags_match: tagsMatch,
   };
 
   const { data, isLoading, refetch } = useProfiles(filters);
@@ -278,6 +291,49 @@ export default function ProfilesPage() {
                 />
               </div>
             </div>
+
+            {/* Tags */}
+            {(availableTags?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                    <Tag className="w-3 h-3" /> Tags
+                  </p>
+                  {tags.length > 1 && (
+                    <div className="flex items-center gap-1 bg-card border border-border rounded-md p-0.5">
+                      <button
+                        onClick={() => { setTagsMatch("all"); setPage(1); }}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          tagsMatch === "all" ? "bg-gold/15 text-gold" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="O usuário precisa ter todas as tags selecionadas"
+                      >
+                        Todas
+                      </button>
+                      <button
+                        onClick={() => { setTagsMatch("any"); setPage(1); }}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          tagsMatch === "any" ? "bg-gold/15 text-gold" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Basta ter qualquer uma das tags selecionadas"
+                      >
+                        Qualquer
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {availableTags?.map((tag) => (
+                    <FilterChip
+                      key={tag}
+                      label={tag}
+                      active={tags.includes(tag)}
+                      onClick={() => toggleTag(tag)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

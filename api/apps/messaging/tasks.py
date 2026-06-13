@@ -1,6 +1,7 @@
 """Celery tasks de mensageria."""
 
 import logging
+from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
@@ -165,7 +166,12 @@ def send_message_task(
     bypass_quiet_hours: bool = False,
     bypass_frequency_cap: bool = False,
 ):
-    """Envia uma mensagem de forma assíncrona."""
+    """Envia uma mensagem de forma assíncrona.
+
+    Falhas transitórias (provider caiu, timeout) disparam retry automático com
+    backoff. Falhas permanentes (sem consent, cap, template quebrado) não — o
+    MessageLog fica como `failed`/`rejected` para auditoria e reprocessamento.
+    """
     try:
         profile = Profile.objects.get(id=profile_id)
     except Profile.DoesNotExist:
@@ -186,11 +192,122 @@ def send_message_task(
         bypass_frequency_cap=bypass_frequency_cap,
     )
 
+    # Retry automático só para falhas transitórias. service.send engolia as
+    # exceções e retornava um SendResult, então o retry da task nunca disparava:
+    # reerguemos o sinal aqui para que o Celery aplique o backoff.
+    if not result.success and result.retryable:
+        try:
+            raise self.retry(
+                exc=RuntimeError(f"send failed (retryable): {result.error}"),
+            )
+        except self.MaxRetriesExceededError:
+            logger.error(
+                "send_message_task esgotou retries: profile=%s template=%s erro=%s",
+                profile_id, template_code, result.error,
+            )
+
     return {
         "success": result.success,
         "message_id": result.message_id,
         "error": result.error,
     }
+
+
+# Máximo de MessageLogs `failed` por combinação (profile, canal, template, fluxo)
+# antes de desistir no reprocessamento — evita reenvio infinito.
+SEND_ATTEMPT_CAP = 5
+_SUCCESS_STATUSES = ("sent", "delivered", "opened", "clicked")
+
+
+def _requeue_message_log(log) -> None:
+    """Reenfileira um MessageLog para reenvio, reusando os parâmetros originais."""
+    from django.db.models import F
+
+    from .models import MessageLog
+
+    sk = log.send_kwargs or {}
+    send_message_task.delay(
+        profile_id=log.profile_id,
+        channel=log.channel,
+        template_code=log.template_code,
+        context=sk.get("context") or {},
+        flow_execution_id=log.flow_execution_id,
+        campaign_id=log.campaign_id,
+        from_email=sk.get("from_email", ""),
+        from_name=sk.get("from_name", ""),
+        bypass_quiet_hours=sk.get("bypass_quiet_hours", False),
+        bypass_frequency_cap=sk.get("bypass_frequency_cap", False),
+    )
+    # Marca a origem como reprocessada p/ a varredura não pegá-la de novo.
+    MessageLog.objects.filter(id=log.id).update(retry_count=F("retry_count") + 1)
+
+
+@shared_task(time_limit=120)
+def retry_failed_messages(
+    message_log_ids: list[int] | None = None,
+    max_age_hours: int = 24,
+    min_age_minutes: int = 30,
+):
+    """Reprocessa mensagens com falha (provider caiu, etc).
+
+    - Com `message_log_ids`: reenvio manual (admin/API) dos logs selecionados.
+    - Sem ids: varredura periódica (Celery Beat). Pega `failed` recentes que o
+      retry automático já esgotou, deduplicando por combinação e respeitando o
+      cap de tentativas. Não toca em `rejected` (consent/cap/quiet) — reenviar
+      esses violaria compliance.
+    """
+    from .models import MessageLog
+
+    qs = MessageLog.objects.filter(status="failed")
+
+    if message_log_ids:
+        qs = qs.filter(id__in=message_log_ids)
+        requeued = 0
+        for log in qs.iterator():
+            _requeue_message_log(log)
+            requeued += 1
+        logger.info("retry_failed_messages (manual): requeued=%s", requeued)
+        return {"requeued": requeued, "skipped": 0}
+
+    now = timezone.now()
+    qs = qs.filter(
+        created_at__lte=now - timedelta(minutes=min_age_minutes),  # deixa o auto-retry terminar
+        created_at__gte=now - timedelta(hours=max_age_hours),
+        retry_count=0,  # ainda não reprocessado pela varredura
+    ).order_by("-created_at")
+
+    requeued = 0
+    skipped = 0
+    seen: set[tuple] = set()
+    for log in qs.iterator():
+        combo = (log.profile_id, log.channel, log.template_code, log.flow_execution_id)
+        if combo in seen:
+            continue  # 1 reenvio por combinação/rodada
+        seen.add(combo)
+
+        combo_filter = {
+            "profile_id": log.profile_id,
+            "channel": log.channel,
+            "template_code": log.template_code,
+            "flow_execution_id": log.flow_execution_id,
+        }
+        # Já recuperou numa tentativa posterior à falha? Não reenvia.
+        # (sucesso anterior à falha não conta — ex: mesmo template reenviado depois.)
+        if MessageLog.objects.filter(
+            status__in=_SUCCESS_STATUSES, created_at__gte=log.created_at, **combo_filter
+        ).exists():
+            skipped += 1
+            continue
+        # Esgotou o teto de tentativas? Desiste.
+        if MessageLog.objects.filter(status="failed", **combo_filter).count() >= SEND_ATTEMPT_CAP:
+            skipped += 1
+            continue
+
+        _requeue_message_log(log)
+        requeued += 1
+
+    logger.info("retry_failed_messages (sweep): requeued=%s skipped=%s", requeued, skipped)
+    return {"requeued": requeued, "skipped": skipped}
 
 
 @shared_task(time_limit=30, max_retries=3, default_retry_delay=30, bind=True)

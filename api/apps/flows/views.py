@@ -220,6 +220,23 @@ class FlowViewSet(viewsets.ModelViewSet):
         runs = flow.schedule_runs.order_by("-run_at")[:50]
         return Response(FlowScheduleRunSerializer(runs, many=True).data)
 
+    @action(detail=True, methods=["get"], url_path="node_counts")
+    def node_counts(self, request, pk=None):
+        """
+        GET /api/v1/flows/{id}/node_counts/
+        Ocupação atual: nº de execuções ativas paradas em cada nó (tempo real).
+        """
+        from django.db.models import Count
+
+        flow = self.get_object()
+        rows = (
+            flow.executions.filter(state="active")
+            .values("current_node_id")
+            .annotate(count=Count("id"))
+        )
+        counts = {r["current_node_id"]: r["count"] for r in rows}
+        return Response({"counts": counts, "total_active": sum(counts.values())})
+
 
 class FlowExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = FlowExecution.objects.select_related("flow", "profile").order_by("-started_at")

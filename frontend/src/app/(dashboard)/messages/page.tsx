@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMessageLogs, useMessagingStats } from "@/lib/hooks";
+import { useMessageLogs, useMessagingStats, useRetryMessage } from "@/lib/hooks";
 import { SendMessageModal } from "@/components/features/messages/send-message-modal";
+import { PurgeLogsModal } from "@/components/features/messages/purge-logs-modal";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
-  Activity, ChevronLeft, ChevronRight, Send,
+  Activity, ChevronLeft, ChevronRight, Send, RotateCw, Trash2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 const CHANNEL_FILTERS = [
   { value: "", label: "Todos canais" },
@@ -81,6 +83,16 @@ export default function MessagesPage() {
   const [page, setPage] = useState(1);
   const [statsDays, setStatsDays] = useState(7);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
+
+  const retryMessage = useRetryMessage();
+
+  const handleRetry = (id: number) => {
+    retryMessage.mutate(id, {
+      onSuccess: () => toast.success("Mensagem reenfileirada para reenvio"),
+      onError: () => toast.error("Não foi possível reenviar a mensagem"),
+    });
+  };
 
   const { data, isLoading } = useMessageLogs({
     channel: channelFilter || undefined,
@@ -131,6 +143,7 @@ export default function MessagesPage() {
   return (
     <>
       <SendMessageModal open={sendModalOpen} onClose={() => setSendModalOpen(false)} />
+      <PurgeLogsModal open={purgeModalOpen} onClose={() => setPurgeModalOpen(false)} />
       <div className="flex flex-col flex-1 min-h-0">
 
         {/* ── Sticky header: title + stats + filters + column headers ── */}
@@ -144,6 +157,13 @@ export default function MessagesPage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPurgeModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Limpar logs
+              </button>
               <button
                 onClick={() => setSendModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-background text-xs font-semibold hover:bg-gold/90 transition-colors"
@@ -233,13 +253,14 @@ export default function MessagesPage() {
           </div>
 
           {/* Column headers */}
-          <div className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+          <div className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
             <div>Canal</div>
             <div>Usuário</div>
             <div>Template</div>
             <div>Assunto</div>
             <div>Status</div>
             <div>Enviada</div>
+            <div className="text-right">Ações</div>
           </div>
         </div>
 
@@ -247,13 +268,14 @@ export default function MessagesPage() {
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="divide-y divide-border/50">
             {isLoading && Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-3">
+              <div key={i} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-3">
                 <div><Skeleton className="h-4 w-14" /></div>
                 <div><Skeleton className="h-4 w-20" /></div>
                 <div><Skeleton className="h-4 w-24" /></div>
                 <div><Skeleton className="h-4 w-40" /></div>
                 <div><Skeleton className="h-4 w-16" /></div>
                 <div><Skeleton className="h-4 w-20" /></div>
+                <div className="flex justify-end"><Skeleton className="h-4 w-16" /></div>
               </div>
             ))}
 
@@ -263,7 +285,7 @@ export default function MessagesPage() {
               const statusCfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.sent;
 
               return (
-                <div key={msg.id} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px] px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                <div key={msg.id} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-3 hover:bg-white/[0.02] transition-colors">
                   <div className="flex items-center">
                     <span className={chanBadge}>
                       <ChanIcon className="w-3 h-3" />
@@ -291,6 +313,21 @@ export default function MessagesPage() {
                         ? formatDistanceToNow(new Date(msg.sent_at), { locale: ptBR, addSuffix: true })
                         : "—"}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {msg.status === "failed" ? (
+                      <button
+                        onClick={() => handleRetry(msg.id)}
+                        disabled={retryMessage.isPending && retryMessage.variables === msg.id}
+                        title={msg.error_message ? `Falha: ${msg.error_message}` : "Reenviar mensagem"}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-gold border border-gold/20 hover:bg-gold/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <RotateCw className={`w-3 h-3 ${retryMessage.isPending && retryMessage.variables === msg.id ? "animate-spin" : ""}`} />
+                        Reenviar
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
                   </div>
                 </div>
               );

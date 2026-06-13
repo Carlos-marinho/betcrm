@@ -8,7 +8,7 @@
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#ffffff;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0a0a0a;">
   <tr><td align="center" style="padding:0;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#111111;border-radius:20px;overflow:hidden;border:1px solid #1e1e1e;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#111111;border-radius:{%- if banner_url %}0 0 20px 20px{%- else %}20px{%- endif %};overflow:hidden;border:1px solid #1e1e1e;">
 
       {%- if not banner_url %}
       <!-- top accent -->
@@ -16,7 +16,7 @@
       {%- endif %}
 
       <!-- banner: vinculado via painel → TemplateService injeta banner_url -->
-      <tr><td style="padding:0;line-height:0;font-size:0;">
+      <tr><td style="padding:0;line-height:0;font-size:0;vertical-align:top;">
         {%- if banner_url %}
         <img src="{{ banner_url }}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
         {%- endif %}

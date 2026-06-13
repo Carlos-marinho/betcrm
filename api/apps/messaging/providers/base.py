@@ -13,6 +13,9 @@ class SendResult:
     message_id: str = ""
     error: str = ""
     raw_response: dict[str, Any] = field(default_factory=dict)
+    # False = falha permanente (negócio/config): reenviar não adianta.
+    # Default True: falha de provider/rede é transitória e merece retry.
+    retryable: bool = True
 
 
 @dataclass

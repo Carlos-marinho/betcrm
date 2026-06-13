@@ -27,4 +27,9 @@ CELERY_BEAT_SCHEDULE_DEFAULTS = {
         "task": "apps.messaging.tasks.scheduled_reputation_check",
         "schedule": timedelta(hours=6),
     },
+    # Rede de segurança: reprocessa mensagens com falha a cada 15 min
+    "retry-failed-messages": {
+        "task": "apps.messaging.tasks.retry_failed_messages",
+        "schedule": timedelta(minutes=15),
+    },
 }
