@@ -79,6 +79,43 @@ class RetryFailedSweepTests(TestCase):
         self.assertEqual(log.retry_count, 1)  # marcado como reprocessado
 
     @patch("apps.messaging.tasks.send_message_task.delay")
+    def test_manual_dedupes_same_combo(self, mock_delay):
+        # Vários failed do mesmo destinatário (gerados pelo auto-retry) → 1 reenvio.
+        a = _failed_log(self.profile)
+        b = _failed_log(self.profile)
+        out = retry_failed_messages(message_log_ids=[a.id, b.id])
+        self.assertEqual(out["requeued"], 1)  # 1 email, não 2
+        self.assertEqual(mock_delay.call_count, 1)
+
+    @patch("apps.messaging.tasks.send_message_task.delay")
+    def test_retry_all_dedupes_and_ignores_cap(self, mock_delay):
+        # Mesmo acima do cap, retry_all (manual) deduplica e reenvia 1x.
+        for _ in range(SEND_ATTEMPT_CAP + 2):
+            _failed_log(self.profile)
+        out = retry_failed_messages(retry_all=True)
+        self.assertEqual(out["requeued"], 1)
+        self.assertEqual(mock_delay.call_count, 1)
+
+    @patch("apps.messaging.tasks.send_message_task.delay")
+    def test_retry_all_skips_already_delivered(self, mock_delay):
+        failed = _failed_log(self.profile)
+        MessageLog.objects.filter(id=failed.id).update(
+            created_at=timezone.now() - timedelta(hours=1)
+        )
+        _failed_log(self.profile, status="delivered")  # entregue depois
+        out = retry_failed_messages(retry_all=True)
+        self.assertEqual(out["requeued"], 0)
+        mock_delay.assert_not_called()
+
+    @patch("apps.messaging.tasks.send_message_task.delay")
+    def test_retry_all_filters_by_channel(self, mock_delay):
+        _failed_log(self.profile, channel="email")
+        _failed_log(self.profile, channel="sms")
+        out = retry_failed_messages(retry_all=True, channel="email")
+        self.assertEqual(out["requeued"], 1)
+        self.assertEqual(mock_delay.call_args.kwargs["channel"], "email")
+
+    @patch("apps.messaging.tasks.send_message_task.delay")
     def test_sweep_dedups_by_combo(self, mock_delay):
         from django.utils import timezone
         from datetime import timedelta

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useMessageLogs, useMessagingStats, useRetryMessage } from "@/lib/hooks";
 import { SendMessageModal } from "@/components/features/messages/send-message-modal";
 import { PurgeLogsModal } from "@/components/features/messages/purge-logs-modal";
+import { RetryFailedModal } from "@/components/features/messages/retry-failed-modal";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
@@ -84,12 +85,16 @@ export default function MessagesPage() {
   const [statsDays, setStatsDays] = useState(7);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [purgeModalOpen, setPurgeModalOpen] = useState(false);
+  const [retryAllModalOpen, setRetryAllModalOpen] = useState(false);
 
   const retryMessage = useRetryMessage();
 
   const handleRetry = (id: number) => {
     retryMessage.mutate(id, {
-      onSuccess: () => toast.success("Mensagem reenfileirada para reenvio"),
+      onSuccess: (data) =>
+        data.requeued > 0
+          ? toast.success("Mensagem reenfileirada para reenvio")
+          : toast.info("Já entregue ou já em reenvio — não duplicado"),
       onError: () => toast.error("Não foi possível reenviar a mensagem"),
     });
   };
@@ -144,6 +149,7 @@ export default function MessagesPage() {
     <>
       <SendMessageModal open={sendModalOpen} onClose={() => setSendModalOpen(false)} />
       <PurgeLogsModal open={purgeModalOpen} onClose={() => setPurgeModalOpen(false)} />
+      <RetryFailedModal open={retryAllModalOpen} onClose={() => setRetryAllModalOpen(false)} channel={channelFilter} />
       <div className="flex flex-col flex-1 min-h-0">
 
         {/* ── Sticky header: title + stats + filters + column headers ── */}
@@ -157,6 +163,13 @@ export default function MessagesPage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setRetryAllModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-foreground text-xs font-semibold hover:bg-white/5 transition-colors"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                Reenviar falhados
+              </button>
               <button
                 onClick={() => setPurgeModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/10 transition-colors"

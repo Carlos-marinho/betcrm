@@ -1,9 +1,55 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import requests
+
 from apps.messaging.providers.base import MessageContent
 from apps.messaging.providers.email_mailgun import MailgunEmailProvider
 from apps.messaging.services import MessagingService
+
+
+def _http_error_response(status_code: int, message: str) -> Mock:
+    response = Mock()
+    response.status_code = status_code
+    response.json.return_value = {"message": message}
+    response.raise_for_status.side_effect = requests.HTTPError(response=response)
+    return response
+
+
+def test_mailgun_429_is_not_retryable(mocker):
+    """429 (limite estourado) não deve re-tentar em curto prazo."""
+    provider = MailgunEmailProvider(
+        {"domain": "mkt.betnice.net", "api_key": "k", "default_from_email": "n@mkt.betnice.net"}
+    )
+    mocker.patch(
+        "apps.messaging.providers.email_mailgun.requests.post",
+        return_value=_http_error_response(429, "daily request limit exceeded"),
+    )
+
+    result = provider.send(
+        "p@example.com", MessageContent(subject="s", html="<p>h</p>", text="h")
+    )
+
+    assert result.success is False
+    assert result.retryable is False
+
+
+def test_mailgun_500_stays_retryable(mocker):
+    """Erro transitório de servidor continua retryável (não é rate limit)."""
+    provider = MailgunEmailProvider(
+        {"domain": "mkt.betnice.net", "api_key": "k", "default_from_email": "n@mkt.betnice.net"}
+    )
+    mocker.patch(
+        "apps.messaging.providers.email_mailgun.requests.post",
+        return_value=_http_error_response(500, "internal server error"),
+    )
+
+    result = provider.send(
+        "p@example.com", MessageContent(subject="s", html="<p>h</p>", text="h")
+    )
+
+    assert result.success is False
+    assert result.retryable is True
 
 
 def test_mailgun_provider_formats_valid_from_header(mocker):
