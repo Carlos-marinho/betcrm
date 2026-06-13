@@ -455,6 +455,21 @@ export function useUpdateFlow() {
   });
 }
 
+export function useDeleteFlow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/flows/${id}/`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.removeQueries({ queryKey: ["flows", id] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    },
+  });
+}
+
 // ── Template mutations ────────────────────────────────────────────────────────
 
 export function useCreateTemplate() {
