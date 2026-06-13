@@ -11,6 +11,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import (
+    action,
     api_view,
     authentication_classes,
     permission_classes,
@@ -92,7 +93,7 @@ class MessageLogSerializer(serializers.ModelSerializer):
             "channel", "recipient",
             "template_code", "subject", "body_preview",
             "provider", "provider_name", "external_message_id",
-            "status", "error_message",
+            "status", "error_message", "retry_count",
             "created_at", "sent_at", "delivered_at",
             "opened_at", "clicked_at", "bounced_at",
             "flow_execution_id", "campaign_id",
@@ -105,6 +106,31 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ["channel", "status"]
     search_fields = ["profile__external_id", "template_code", "recipient"]
+
+    @action(detail=True, methods=["post"])
+    def retry(self, request, pk=None):
+        """Reenfileira esta mensagem (se `failed`) para reenvio. POST .../logs/{id}/retry/"""
+        log = self.get_object()
+        if log.status != "failed":
+            return Response(
+                {"error": f"só é possível reenviar mensagens 'failed' (atual: {log.status})"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .tasks import retry_failed_messages
+
+        retry_failed_messages.delay(message_log_ids=[log.id])
+        return Response({"status": "queued", "id": log.id})
+
+    @action(detail=False, methods=["post"], url_path="retry-failed")
+    def retry_failed(self, request):
+        """Reenfileira em lote. POST .../logs/retry-failed/ Body: {"ids": [...]} (vazio = varredura)."""
+        from .tasks import retry_failed_messages
+
+        ids = request.data.get("ids") or None
+        if ids is not None and not isinstance(ids, list):
+            return Response({"error": "ids deve ser uma lista"}, status=status.HTTP_400_BAD_REQUEST)
+        retry_failed_messages.delay(message_log_ids=ids)
+        return Response({"status": "queued", "ids": ids or "sweep"}, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(["POST"])

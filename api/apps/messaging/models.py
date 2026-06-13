@@ -124,6 +124,12 @@ class MessageLog(models.Model):
     flow_execution_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     campaign_id = models.CharField(max_length=100, blank=True, db_index=True)
 
+    # Reprocessamento de falhas
+    # Guarda os parâmetros de envio (context, from_email, bypass_*) p/ reenvio fiel.
+    send_kwargs = models.JSONField(default=dict, blank=True)
+    # Quantas vezes este log foi reenfileirado por nós (manual/beat). Evita reenvio duplo.
+    retry_count = models.PositiveSmallIntegerField(default=0)
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

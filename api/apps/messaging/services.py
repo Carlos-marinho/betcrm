@@ -56,26 +56,35 @@ class MessagingService:
             bypass_quiet_hours: True só para mensagens transacionais críticas
             bypass_frequency_cap: True só para transacionais críticas
         """
+        # Parâmetros de envio preservados em cada MessageLog p/ reprocessamento fiel.
+        send_kwargs = {
+            "context": context or {},
+            "from_email": from_email,
+            "from_name": from_name,
+            "bypass_quiet_hours": bypass_quiet_hours,
+            "bypass_frequency_cap": bypass_frequency_cap,
+        }
+
         # 1. Consentimento
         if not self._has_consent(profile, channel):
-            self._log(profile, channel, template_code, "rejected", "no_consent", flow_execution_id, campaign_id)
-            return SendResult(success=False, error="no_consent")
+            self._log(profile, channel, template_code, "rejected", "no_consent", flow_execution_id, campaign_id, send_kwargs)
+            return SendResult(success=False, error="no_consent", retryable=False)
 
         # 2. Frequency cap
         if not bypass_frequency_cap and not self._within_frequency_cap(profile, channel):
-            self._log(profile, channel, template_code, "rejected", "frequency_cap", flow_execution_id, campaign_id)
-            return SendResult(success=False, error="frequency_cap")
+            self._log(profile, channel, template_code, "rejected", "frequency_cap", flow_execution_id, campaign_id, send_kwargs)
+            return SendResult(success=False, error="frequency_cap", retryable=False)
 
         # 3. Quiet hours
         if not bypass_quiet_hours and is_quiet_hours():
-            self._log(profile, channel, template_code, "rejected", "quiet_hours", flow_execution_id, campaign_id)
-            return SendResult(success=False, error="quiet_hours")
+            self._log(profile, channel, template_code, "rejected", "quiet_hours", flow_execution_id, campaign_id, send_kwargs)
+            return SendResult(success=False, error="quiet_hours", retryable=False)
 
         # 4. Recipient
         recipient = self._get_recipient(profile, channel)
         if not recipient:
-            self._log(profile, channel, template_code, "rejected", "no_recipient", flow_execution_id, campaign_id)
-            return SendResult(success=False, error="no_recipient")
+            self._log(profile, channel, template_code, "rejected", "no_recipient", flow_execution_id, campaign_id, send_kwargs)
+            return SendResult(success=False, error="no_recipient", retryable=False)
 
         # 5. Renderizar template
         from apps.templates.services import TemplateService
@@ -90,8 +99,9 @@ class MessagingService:
                 content.from_name = from_name
         except Exception as e:
             logger.exception("Template render error: %s", template_code)
-            self._log(profile, channel, template_code, "failed", str(e), flow_execution_id, campaign_id)
-            return SendResult(success=False, error=f"template_error: {e}")
+            self._log(profile, channel, template_code, "failed", str(e), flow_execution_id, campaign_id, send_kwargs)
+            # Template quebrado é permanente: reenviar repetiria o mesmo erro.
+            return SendResult(success=False, error=f"template_error: {e}", retryable=False)
 
         # 6. Pegar providers ordenados por prioridade
         providers = list(
@@ -101,10 +111,10 @@ class MessagingService:
         )
 
         if not providers:
-            return SendResult(success=False, error=f"no_providers_for_channel_{channel}")
+            return SendResult(success=False, error=f"no_providers_for_channel_{channel}", retryable=False)
 
         if channel == "email" and from_email and not self._is_allowed_from_email(providers, from_email):
-            return SendResult(success=False, error="from_email_not_registered")
+            return SendResult(success=False, error="from_email_not_registered", retryable=False)
 
         # 7. Tenta enviar com fallback
         # Para canais sem tracking nativo de provider (SMS), preservamos o
@@ -128,6 +138,7 @@ class MessagingService:
                 body_preview=(content.body or content.text or content.html)[:200],
                 flow_execution_id=flow_execution_id,
                 campaign_id=campaign_id,
+                send_kwargs=send_kwargs,
             )
 
             if track_clicks:
@@ -202,8 +213,8 @@ class MessagingService:
             return mask_email(recipient)
         return mask_phone(recipient)
 
-    def _create_log(self, **kwargs) -> MessageLog:
-        return MessageLog.objects.create(status="queued", **kwargs)
+    def _create_log(self, send_kwargs: dict | None = None, **kwargs) -> MessageLog:
+        return MessageLog.objects.create(status="queued", send_kwargs=send_kwargs or {}, **kwargs)
 
     def _is_allowed_from_email(self, providers: list[ProviderConfig], from_email: str) -> bool:
         selected = from_email.strip().lower()
@@ -244,7 +255,7 @@ class MessagingService:
 
         log.save()
 
-    def _log(self, profile, channel: str, template_code: str, status: str, reason: str, flow_id, campaign_id: str):
+    def _log(self, profile, channel: str, template_code: str, status: str, reason: str, flow_id, campaign_id: str, send_kwargs: dict | None = None):
         """Log rápido para mensagens rejeitadas antes de enviar."""
         MessageLog.objects.create(
             profile=profile,
@@ -255,4 +266,5 @@ class MessagingService:
             error_message=reason,
             flow_execution_id=flow_id,
             campaign_id=campaign_id,
+            send_kwargs=send_kwargs or {},
         )
