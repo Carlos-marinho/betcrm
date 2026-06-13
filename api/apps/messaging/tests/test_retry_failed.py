@@ -1,8 +1,12 @@
 """Testes do reprocessamento de mensagens com falha (retry automático e varredura)."""
 
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.messaging.models import MessageLog
 from apps.messaging.providers.base import SendResult
@@ -139,3 +143,50 @@ class RetryFailedSweepTests(TestCase):
         out = retry_failed_messages()
         self.assertEqual(out["requeued"], 0)
         mock_delay.assert_not_called()
+
+
+class PurgeLogsEndpointTests(TestCase):
+    def setUp(self):
+        self.profile = Profile.objects.create(external_id="u1", email="u@x.com")
+        self.client = APIClient()
+        user = get_user_model().objects.create_user(username="admin", password="x")
+        self.client.force_authenticate(user=user)
+
+    def _log_at(self, days_ago: int):
+        log = _failed_log(self.profile, status="sent")
+        when = timezone.now() - timedelta(days=days_ago)
+        MessageLog.objects.filter(id=log.id).update(created_at=when)
+        return log
+
+    def test_purge_all(self):
+        self._log_at(0)
+        self._log_at(5)
+        resp = self.client.post("/api/v1/messaging/logs/purge/", {"all": True}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["deleted"], 2)
+        self.assertEqual(MessageLog.objects.count(), 0)
+
+    def test_purge_date_range_inclusive(self):
+        self._log_at(0)   # hoje — fora do range
+        self._log_at(5)   # dentro
+        self._log_at(10)  # dentro (borda)
+        date_to = (timezone.now() - timedelta(days=3)).date().isoformat()
+        date_from = (timezone.now() - timedelta(days=10)).date().isoformat()
+        resp = self.client.post(
+            "/api/v1/messaging/logs/purge/",
+            {"date_from": date_from, "date_to": date_to},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["deleted"], 2)
+        self.assertEqual(MessageLog.objects.count(), 1)
+
+    def test_purge_requires_range_or_all(self):
+        self._log_at(0)
+        resp = self.client.post("/api/v1/messaging/logs/purge/", {}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(MessageLog.objects.count(), 1)
+
+    def test_purge_invalid_date(self):
+        resp = self.client.post("/api/v1/messaging/logs/purge/", {"date_from": "13/06/2026"}, format="json")
+        self.assertEqual(resp.status_code, 400)
