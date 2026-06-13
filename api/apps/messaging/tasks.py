@@ -242,47 +242,25 @@ def _requeue_message_log(log) -> None:
     MessageLog.objects.filter(id=log.id).update(retry_count=F("retry_count") + 1)
 
 
-@shared_task(time_limit=120)
-def retry_failed_messages(
-    message_log_ids: list[int] | None = None,
-    max_age_hours: int = 24,
-    min_age_minutes: int = 30,
-):
-    """Reprocessa mensagens com falha (provider caiu, etc).
+def _dedupe_requeue(qs, *, enforce_cap: bool) -> tuple[int, int]:
+    """Reenfileira logs `failed` deduplicando por combinação.
 
-    - Com `message_log_ids`: reenvio manual (admin/API) dos logs selecionados.
-    - Sem ids: varredura periódica (Celery Beat). Pega `failed` recentes que o
-      retry automático já esgotou, deduplicando por combinação e respeitando o
-      cap de tentativas. Não toca em `rejected` (consent/cap/quiet) — reenviar
-      esses violaria compliance.
+    Garante **1 reenvio por (profile, canal, template, fluxo)** — então vários
+    logs failed do mesmo destinatário (gerados pelo retry automático) viram um
+    único reenvio, sem email duplicado. Pula combos que já tiveram um envio
+    bem-sucedido posterior à falha. `enforce_cap` aplica o teto de tentativas
+    (usado só na varredura automática; no reenvio manual o usuário decide).
+    Retorna (requeued, skipped).
     """
     from .models import MessageLog
-
-    qs = MessageLog.objects.filter(status="failed")
-
-    if message_log_ids:
-        qs = qs.filter(id__in=message_log_ids)
-        requeued = 0
-        for log in qs.iterator():
-            _requeue_message_log(log)
-            requeued += 1
-        logger.info("retry_failed_messages (manual): requeued=%s", requeued)
-        return {"requeued": requeued, "skipped": 0}
-
-    now = timezone.now()
-    qs = qs.filter(
-        created_at__lte=now - timedelta(minutes=min_age_minutes),  # deixa o auto-retry terminar
-        created_at__gte=now - timedelta(hours=max_age_hours),
-        retry_count=0,  # ainda não reprocessado pela varredura
-    ).order_by("-created_at")
 
     requeued = 0
     skipped = 0
     seen: set[tuple] = set()
-    for log in qs.iterator():
+    for log in qs.order_by("-created_at").iterator():
         combo = (log.profile_id, log.channel, log.template_code, log.flow_execution_id)
         if combo in seen:
-            continue  # 1 reenvio por combinação/rodada
+            continue
         seen.add(combo)
 
         combo_filter = {
@@ -291,21 +269,67 @@ def retry_failed_messages(
             "template_code": log.template_code,
             "flow_execution_id": log.flow_execution_id,
         }
-        # Já recuperou numa tentativa posterior à falha? Não reenvia.
+        # Já recuperou numa tentativa posterior à falha? Não reenvia (anti-duplicação).
         # (sucesso anterior à falha não conta — ex: mesmo template reenviado depois.)
         if MessageLog.objects.filter(
             status__in=_SUCCESS_STATUSES, created_at__gte=log.created_at, **combo_filter
         ).exists():
             skipped += 1
             continue
-        # Esgotou o teto de tentativas? Desiste.
-        if MessageLog.objects.filter(status="failed", **combo_filter).count() >= SEND_ATTEMPT_CAP:
+        if enforce_cap and (
+            MessageLog.objects.filter(status="failed", **combo_filter).count() >= SEND_ATTEMPT_CAP
+        ):
             skipped += 1
             continue
 
         _requeue_message_log(log)
         requeued += 1
 
+    return requeued, skipped
+
+
+@shared_task(time_limit=120)
+def retry_failed_messages(
+    message_log_ids: list[int] | None = None,
+    retry_all: bool = False,
+    channel: str | None = None,
+    max_age_hours: int = 24,
+    min_age_minutes: int = 30,
+):
+    """Reprocessa mensagens com falha (provider caiu, rate limit, etc).
+
+    Três modos, todos com deduplicação por combinação (nunca reenvia email
+    duplicado) e que ignoram `rejected` (consent/cap/quiet — compliance):
+
+    - `message_log_ids`: reenvio manual dos logs selecionados (sem cap).
+    - `retry_all=True`: reenvia TODOS os `failed` (opcionalmente de um `channel`),
+      sem cap — o botão "Reenviar falhados".
+    - sem nada: varredura periódica (Beat) — janela de tempo + cap + só logs
+      ainda não reprocessados.
+    """
+    from .models import MessageLog
+
+    qs = MessageLog.objects.filter(status="failed")
+    if channel:
+        qs = qs.filter(channel=channel)
+
+    if message_log_ids:
+        requeued, skipped = _dedupe_requeue(qs.filter(id__in=message_log_ids), enforce_cap=False)
+        logger.info("retry_failed_messages (manual): requeued=%s skipped=%s", requeued, skipped)
+        return {"requeued": requeued, "skipped": skipped}
+
+    if retry_all:
+        requeued, skipped = _dedupe_requeue(qs, enforce_cap=False)
+        logger.info("retry_failed_messages (all): requeued=%s skipped=%s", requeued, skipped)
+        return {"requeued": requeued, "skipped": skipped}
+
+    now = timezone.now()
+    window = qs.filter(
+        created_at__lte=now - timedelta(minutes=min_age_minutes),  # deixa o auto-retry terminar
+        created_at__gte=now - timedelta(hours=max_age_hours),
+        retry_count=0,  # ainda não reprocessado pela varredura
+    )
+    requeued, skipped = _dedupe_requeue(window, enforce_cap=True)
     logger.info("retry_failed_messages (sweep): requeued=%s skipped=%s", requeued, skipped)
     return {"requeued": requeued, "skipped": skipped}
 

@@ -96,16 +96,23 @@ class MailgunEmailProvider(BaseProvider):
 
         except requests.RequestException as e:
             logger.exception("Mailgun send error")
+            response = getattr(e, "response", None)
             error_detail = ""
-            if hasattr(e, "response") and e.response is not None:
+            if response is not None:
                 try:
-                    error_detail = e.response.json().get("message", "")
-                except Exception:
-                    error_detail = e.response.text[:500]
+                    error_detail = response.json().get("message", "")
+                except (ValueError, AttributeError):
+                    error_detail = response.text[:500]
 
+            # 429 = limite de envio estourado (ex: plano free). Não re-tenta em
+            # curto prazo — não resolveria e só gastaria quota. Mas NÃO bloqueia o
+            # domínio: cada novo envio/reenvio tenta de novo, então volta a
+            # funcionar assim que o limite sair (upgrade de plano).
+            is_rate_limited = response is not None and response.status_code == 429
             return SendResult(
                 success=False,
                 error=f"{e}: {error_detail}",
+                retryable=not is_rate_limited,
                 raw_response={"error": str(e), "detail": error_detail},
             )
 

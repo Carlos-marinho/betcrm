@@ -118,19 +118,34 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
             )
         from .tasks import retry_failed_messages
 
-        retry_failed_messages.delay(message_log_ids=[log.id])
-        return Response({"status": "queued", "id": log.id})
+        # Síncrono: a decisão (dedup/já-entregue) é rápida; o envio em si é async.
+        result = retry_failed_messages(message_log_ids=[log.id])
+        return Response(result)
 
     @action(detail=False, methods=["post"], url_path="retry-failed")
     def retry_failed(self, request):
-        """Reenfileira em lote. POST .../logs/retry-failed/ Body: {"ids": [...]} (vazio = varredura)."""
+        """Reenfileira mensagens com falha. POST .../logs/retry-failed/
+
+        Body: {"ids": [...]} para logs específicos, ou {"all": true, "channel"?:
+        "email"} para todos os falhados. Deduplica por destinatário (nunca
+        manda email repetido). Retorna {requeued, skipped}.
+        """
         from .tasks import retry_failed_messages
 
-        ids = request.data.get("ids") or None
-        if ids is not None and not isinstance(ids, list):
-            return Response({"error": "ids deve ser uma lista"}, status=status.HTTP_400_BAD_REQUEST)
-        retry_failed_messages.delay(message_log_ids=ids)
-        return Response({"status": "queued", "ids": ids or "sweep"}, status=status.HTTP_202_ACCEPTED)
+        ids = request.data.get("ids")
+        if ids:
+            if not isinstance(ids, list):
+                return Response({"error": "ids deve ser uma lista"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(retry_failed_messages(message_log_ids=ids))
+
+        if request.data.get("all"):
+            channel = request.data.get("channel") or None
+            return Response(retry_failed_messages(retry_all=True, channel=channel))
+
+        return Response(
+            {"error": "informe 'ids' (lista) ou 'all': true"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
     def purge(self, request):
