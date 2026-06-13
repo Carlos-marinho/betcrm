@@ -905,10 +905,27 @@ export function useRetryMessage() {
   return useMutation({
     mutationFn: async (id: number) => {
       const { data } = await api.post(`/messaging/logs/${id}/retry/`);
-      return data as { status: string; id: number };
+      return data as { requeued: number; skipped: number };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
+    },
+  });
+}
+
+export function useRetryAllFailed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (channel?: string) => {
+      const { data } = await api.post("/messaging/logs/retry-failed/", {
+        all: true,
+        channel: channel || undefined,
+      });
+      return data as { requeued: number; skipped: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["messaging-stats"] });
     },
   });
 }
