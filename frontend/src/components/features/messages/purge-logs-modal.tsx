@@ -53,7 +53,14 @@ export function PurgeLogsModal({ open, onClose }: Props) {
         toast.success(`${data.deleted.toLocaleString("pt-BR")} log(s) removido(s)`);
         handleClose();
       },
-      onError: () => toast.error("Não foi possível limpar os logs"),
+      onError: (err) => {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        toast.error(
+          status === 403
+            ? "Apenas administradores podem limpar os logs"
+            : "Não foi possível limpar os logs",
+        );
+      },
     });
   }
 
