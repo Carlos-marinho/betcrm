@@ -7,6 +7,8 @@ import re
 from datetime import datetime, timezone
 
 import django_filters
+from django.db import connection
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
@@ -26,12 +28,27 @@ class ProfileFilter(django_filters.FilterSet):
     has_ftd = django_filters.BooleanFilter(method="filter_has_ftd")
     ltv_min = django_filters.NumberFilter(field_name="ltv", lookup_expr="gte")
     ltv_max = django_filters.NumberFilter(field_name="ltv", lookup_expr="lte")
+    # Filtro por tags (lista separada por vírgula). tags_match=all (padrão) | any.
+    tags = django_filters.CharFilter(method="filter_tags")
 
     def filter_has_ftd(self, queryset, name, value):
         if value is True:
             return queryset.filter(ftd_at__isnull=False)
         if value is False:
             return queryset.filter(ftd_at__isnull=True)
+        return queryset
+
+    def filter_tags(self, queryset, name, value):
+        tags = [t.strip() for t in value.split(",") if t.strip()]
+        if not tags:
+            return queryset
+        if (self.data.get("tags_match") or "all").lower() == "any":
+            q = Q()
+            for tag in tags:
+                q |= Q(tags__contains=[tag])
+            return queryset.filter(q)
+        for tag in tags:  # "all": precisa conter todas
+            queryset = queryset.filter(tags__contains=[tag])
         return queryset
 
     class Meta:
@@ -331,6 +348,25 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
         if not profile:
             return Response({"error": "not_found"}, status=404)
         return Response(ProfileSerializer(profile).data)
+
+    @action(detail=False, methods=["get"], url_path="tags")
+    def tags(self, request):
+        """
+        GET /api/v1/profiles/tags/
+        Tags distintas em uso (sistema + campanha), para popular filtros.
+        """
+        table = Profile._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT DISTINCT tag FROM {table} p "
+                "CROSS JOIN LATERAL jsonb_array_elements_text("
+                "  CASE WHEN jsonb_typeof(p.tags) = 'array' THEN p.tags ELSE '[]'::jsonb END"
+                ") AS tag "
+                "WHERE p.is_deleted = false "
+                "ORDER BY tag"
+            )
+            tags = [row[0] for row in cursor.fetchall()]
+        return Response({"tags": tags})
 
     @action(detail=True, methods=["get"])
     def timeline(self, request, id=None):
