@@ -91,10 +91,7 @@ export default function MessagesPage() {
 
   const handleRetry = (id: number) => {
     retryMessage.mutate(id, {
-      onSuccess: (data) =>
-        data.requeued > 0
-          ? toast.success("Mensagem reenfileirada para reenvio")
-          : toast.info("Já entregue ou já em reenvio — não duplicado"),
+      onSuccess: () => toast.success("Reenvio iniciado — acompanhe no log"),
       onError: () => toast.error("Não foi possível reenviar a mensagem"),
     });
   };

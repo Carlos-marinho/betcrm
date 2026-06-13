@@ -38,16 +38,11 @@ export function RetryFailedModal({ open, onClose, channel }: Props) {
 
   function handleRetry() {
     retryAll.mutate(channel, {
-      onSuccess: (data) => {
-        if (data.requeued > 0) {
-          const ignored = data.skipped > 0 ? ` · ${data.skipped} ignorada(s)` : "";
-          toast.success(`${data.requeued} mensagem(ns) reenfileirada(s)${ignored}`);
-        } else {
-          toast.info("Nenhuma mensagem para reenviar (já entregues ou sem falhas).");
-        }
+      onSuccess: () => {
+        toast.success("Reenvio dos falhados iniciado — acompanhe no log");
         handleClose();
       },
-      onError: () => toast.error("Não foi possível reenviar as mensagens"),
+      onError: () => toast.error("Não foi possível iniciar o reenvio"),
     });
   }
 

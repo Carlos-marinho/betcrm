@@ -905,7 +905,7 @@ export function useRetryMessage() {
   return useMutation({
     mutationFn: async (id: number) => {
       const { data } = await api.post(`/messaging/logs/${id}/retry/`);
-      return data as { requeued: number; skipped: number };
+      return data as { status: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
@@ -921,7 +921,7 @@ export function useRetryAllFailed() {
         all: true,
         channel: channel || undefined,
       });
-      return data as { requeued: number; skipped: number };
+      return data as { status: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
