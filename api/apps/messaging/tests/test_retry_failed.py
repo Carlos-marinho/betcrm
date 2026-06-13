@@ -199,6 +199,67 @@ class RetryFailedSweepTests(TestCase):
         mock_delay.assert_not_called()
 
 
+class FailedGroupedEndpointTests(TestCase):
+    """Visão agrupada por dedup das mensagens com falha."""
+
+    def setUp(self):
+        self.profile = Profile.objects.create(external_id="u1", email="u@x.com", consent_email=True)
+        self.client = APIClient()
+        self.client.force_authenticate(
+            user=get_user_model().objects.create_user(username="member", password="x")
+        )
+
+    def _get(self, **params):
+        resp = self.client.get("/api/v1/messaging/logs/failed-grouped/", params)
+        self.assertEqual(resp.status_code, 200)
+        return resp.data
+
+    def test_groups_same_combo_with_attempt_count(self):
+        # Três falhas do mesmo combo (geradas pelo auto-retry) → 1 linha, 3 tentativas.
+        for _ in range(3):
+            _failed_log(self.profile)
+        data = self._get()
+        self.assertEqual(data["count"], 1)
+        row = data["results"][0]
+        self.assertEqual(row["attempts"], 3)
+        self.assertFalse(row["recovered"])
+        self.assertEqual(row["profile_external_id"], "u1")
+
+    def test_last_attempt_is_most_recent(self):
+        old = _failed_log(self.profile)
+        MessageLog.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(hours=2))
+        recent = _failed_log(self.profile)
+        row = self._get()["results"][0]
+        self.assertEqual(row["last_id"], recent.id)
+
+    def test_distinct_combos_stay_separate(self):
+        _failed_log(self.profile, template_code="welcome_v1")
+        _failed_log(self.profile, template_code="ftd_v1")
+        self.assertEqual(self._get()["count"], 2)
+
+    def test_recovered_flag_when_success_after_failure(self):
+        failed = _failed_log(self.profile)
+        MessageLog.objects.filter(id=failed.id).update(created_at=timezone.now() - timedelta(hours=1))
+        _failed_log(self.profile, status="delivered")  # recuperou depois
+        row = self._get()["results"][0]
+        self.assertTrue(row["recovered"])
+
+    def test_success_before_failure_is_not_recovered(self):
+        delivered = _failed_log(self.profile, status="delivered")
+        MessageLog.objects.filter(id=delivered.id).update(created_at=timezone.now() - timedelta(hours=2))
+        failed = _failed_log(self.profile)
+        MessageLog.objects.filter(id=failed.id).update(created_at=timezone.now() - timedelta(hours=1))
+        row = self._get()["results"][0]
+        self.assertFalse(row["recovered"])
+
+    def test_filters_by_channel(self):
+        _failed_log(self.profile, channel="email")
+        _failed_log(self.profile, channel="sms")
+        data = self._get(channel="email")
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["results"][0]["channel"], "email")
+
+
 class PurgeLogsEndpointTests(TestCase):
     def setUp(self):
         self.profile = Profile.objects.create(external_id="u1", email="u@x.com")

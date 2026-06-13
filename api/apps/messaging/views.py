@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, time, timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Min, Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -120,6 +120,109 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
 
         retry_failed_messages.delay(message_log_ids=[log.id])
         return Response({"status": "queued"}, status=status.HTTP_202_ACCEPTED)
+
+    # Status que indicam que uma combinação se recuperou após a falha.
+    _SUCCESS_STATUSES = ("sent", "delivered", "opened", "clicked")
+
+    def _recovered_combos(self, rows: list[dict], channel: str | None) -> set[tuple]:
+        """Combos (da página atual) com um envio OK posterior à última falha.
+
+        Como há retries automáticos, muitos logs `failed` já foram recuperados
+        numa tentativa seguinte. Detectamos isso em uma única query, restrita aos
+        perfis da página, para marcar a linha como "Recuperada".
+        """
+        if not rows:
+            return set()
+
+        earliest = min(r["last_attempt_at"] for r in rows)
+        last_fail = {
+            (r["profile_id"], r["channel"], r["template_code"], r["flow_execution_id"]): r["last_attempt_at"]
+            for r in rows
+        }
+
+        success = MessageLog.objects.filter(
+            status__in=self._SUCCESS_STATUSES,
+            created_at__gte=earliest,
+            profile_id__in={r["profile_id"] for r in rows},
+        )
+        if channel:
+            success = success.filter(channel=channel)
+
+        recovered: set[tuple] = set()
+        for s in success.values(
+            "profile_id", "channel", "template_code", "flow_execution_id", "created_at"
+        ):
+            key = (s["profile_id"], s["channel"], s["template_code"], s["flow_execution_id"])
+            lf = last_fail.get(key)
+            if lf is not None and s["created_at"] >= lf:
+                recovered.add(key)
+        return recovered
+
+    @action(detail=False, methods=["get"], url_path="failed-grouped")
+    def failed_grouped(self, request):
+        """Lista falhas agrupadas pela chave de dedup. GET .../logs/failed-grouped/
+
+        Vários logs `failed` do mesmo destinatário — gerados pelos retries
+        automáticos — viram uma linha só por (perfil, canal, template, fluxo),
+        com nº de tentativas, primeira/última tentativa e se já recuperou. Aceita
+        `?channel=email`. O log mais recente do combo carrega os dados de exibição
+        e o id para o botão "Reenviar".
+        """
+        channel = request.query_params.get("channel")
+        base = MessageLog.objects.filter(status="failed")
+        if channel:
+            base = base.filter(channel=channel)
+
+        groups = (
+            base.values("profile_id", "channel", "template_code", "flow_execution_id")
+            .annotate(
+                attempts=Count("id"),
+                last_attempt_at=Max("created_at"),
+                first_attempt_at=Min("created_at"),
+                max_retry=Max("retry_count"),
+                last_id=Max("id"),
+            )
+            # `last_id` (único por combo) desempata p/ paginação estável quando
+            # vários combos compartilham o mesmo last_attempt_at (falha em massa).
+            .order_by("-last_attempt_at", "-last_id")
+        )
+
+        page = self.paginate_queryset(groups)
+        rows = page if page is not None else list(groups)
+
+        # Campos de exibição vêm do log mais recente de cada combo.
+        reps = {
+            m.id: m
+            for m in MessageLog.objects.filter(
+                id__in=[r["last_id"] for r in rows]
+            ).select_related("profile")
+        }
+        recovered = self._recovered_combos(rows, channel)
+
+        results = []
+        for r in rows:
+            rep = reps.get(r["last_id"])
+            key = (r["profile_id"], r["channel"], r["template_code"], r["flow_execution_id"])
+            results.append({
+                "last_id": r["last_id"],
+                "profile_id": r["profile_id"],
+                "profile_external_id": rep.profile.external_id if rep else None,
+                "channel": r["channel"],
+                "template_code": r["template_code"],
+                "flow_execution_id": r["flow_execution_id"],
+                "recipient": rep.recipient if rep else "",
+                "subject": rep.subject if rep else "",
+                "error_message": rep.error_message if rep else "",
+                "attempts": r["attempts"],
+                "retry_count": r["max_retry"],
+                "first_attempt_at": r["first_attempt_at"],
+                "last_attempt_at": r["last_attempt_at"],
+                "recovered": key in recovered,
+            })
+
+        if page is not None:
+            return self.get_paginated_response(results)
+        return Response(results)
 
     @action(detail=False, methods=["post"], url_path="retry-failed")
     def retry_failed(self, request):
