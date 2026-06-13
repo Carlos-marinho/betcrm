@@ -87,6 +87,8 @@ export interface ProfileFilters {
   profile_type?: "player" | "affiliate" | "";
   ltv_min?: string;
   ltv_max?: string;
+  tags?: string[];
+  tags_match?: "all" | "any";
 }
 
 export function useProfiles(params?: ProfileFilters) {
@@ -99,6 +101,10 @@ export function useProfiles(params?: ProfileFilters) {
   if (params?.profile_type) searchParams.set("profile_type", params.profile_type);
   if (params?.ltv_min) searchParams.set("ltv_min", params.ltv_min);
   if (params?.ltv_max) searchParams.set("ltv_max", params.ltv_max);
+  if (params?.tags && params.tags.length > 0) {
+    searchParams.set("tags", params.tags.join(","));
+    searchParams.set("tags_match", params.tags_match ?? "all");
+  }
   const qs = searchParams.toString();
 
   return useQuery<PaginatedResponse<ProfileListItem>>({
@@ -107,6 +113,17 @@ export function useProfiles(params?: ProfileFilters) {
       const { data } = await api.get(`/profiles/${qs ? `?${qs}` : ""}`);
       return data;
     },
+  });
+}
+
+export function useProfileTags() {
+  return useQuery<string[]>({
+    queryKey: ["profiles", "tags"],
+    queryFn: async () => {
+      const { data } = await api.get("/profiles/tags/");
+      return data.tags as string[];
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -302,6 +319,24 @@ export function useFlowScheduleRuns(flowId: number) {
       return data;
     },
     enabled: !!flowId,
+  });
+}
+
+export interface FlowNodeCounts {
+  counts: Record<string, number>;
+  total_active: number;
+}
+
+// Ocupação ao vivo por nó (execuções ativas). Faz polling só quando habilitado.
+export function useFlowNodeCounts(flowId: number | null, enabled = true) {
+  return useQuery<FlowNodeCounts>({
+    queryKey: ["flows", flowId, "node_counts"],
+    queryFn: async () => {
+      const { data } = await api.get(`/flows/${flowId}/node_counts/`);
+      return data;
+    },
+    enabled: !!flowId && enabled,
+    refetchInterval: enabled ? 5_000 : false,
   });
 }
 

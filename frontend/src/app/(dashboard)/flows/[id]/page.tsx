@@ -27,7 +27,7 @@ import {
   type FlowDefinition,
   type FlowNode,
 } from "@/components/features/flow-canvas/types";
-import { useFlow, useToggleFlow, useUpdateFlow, type Flow } from "@/lib/hooks";
+import { useFlow, useToggleFlow, useUpdateFlow, useFlowNodeCounts, type Flow } from "@/lib/hooks";
 
 function getFlowTriggerConfig(flow: Flow): Record<string, unknown> {
   if (flow.trigger_type === "event") {
@@ -74,6 +74,8 @@ export default function FlowEditorPage() {
   const { data: flow, isLoading, isError } = useFlow(validFlowId);
   const updateMutation = useUpdateFlow();
   const toggleMutation = useToggleFlow();
+  // Ocupação ao vivo por nó — só faz polling com o fluxo ativo (campanha rodando).
+  const { data: nodeCounts } = useFlowNodeCounts(validFlowId, !!flow?.is_active);
 
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -276,6 +278,7 @@ export default function FlowEditorPage() {
             nodes={nodes}
             connections={connections}
             selectedNodeId={selectedNodeId}
+            nodeCounts={nodeCounts?.counts}
             onNodesChange={handleNodesChange}
             onConnectionsChange={handleConnectionsChange}
             onSelectNode={setSelectedNodeId}

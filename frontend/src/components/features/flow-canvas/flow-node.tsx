@@ -54,6 +54,7 @@ interface FlowNodeCardProps {
   isSelected: boolean;
   isConnectingMode: boolean;
   isConnectingSource: boolean;
+  liveCount?: number;
   onMouseDown: (e: React.MouseEvent) => void;
   onPortClick: (port: ConnectionPort, e: React.MouseEvent) => void;
   onNodeClick: (e: React.MouseEvent) => void;
@@ -65,6 +66,7 @@ export function FlowNodeCard({
   isSelected,
   isConnectingMode,
   isConnectingSource,
+  liveCount,
   onMouseDown,
   onPortClick,
   onNodeClick,
@@ -123,6 +125,44 @@ export function FlowNodeCard({
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Live occupancy badge — pessoas paradas neste nó agora */}
+      {liveCount != null && liveCount > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: -10,
+            right: -10,
+            zIndex: 45,
+            minWidth: 22,
+            height: 22,
+            padding: "0 6px",
+            borderRadius: 11,
+            background: "#10B981",
+            border: "2px solid #0A0D1A",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            boxShadow: "0 0 10px rgba(16,185,129,0.6)",
+            pointerEvents: "none",
+          }}
+          title={`${liveCount} pessoa(s) neste nó agora`}
+        >
+          <span
+            className="animate-pulse"
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.9)",
+            }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#06281D", lineHeight: 1 }}>
+            {liveCount.toLocaleString("pt-BR")}
+          </span>
         </div>
       )}
 
