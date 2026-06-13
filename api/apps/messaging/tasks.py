@@ -29,6 +29,29 @@ _TIMESTAMP_FIELD: dict[str, str] = {
     "bounced":   "bounced_at",
 }
 
+# template_code -> tag aplicada no clique do email (alimenta downsell por segmento).
+CLICK_TAG_BY_TEMPLATE: dict[str, str] = {
+    "copa_freebet_brasil_marrocos_v1": "COPA_CLICKED",
+    "copa_crosssell_brasil_marrocos_v1": "COPA_CLICKED",
+    "copa_reativacao_brasil_marrocos_v1": "COPA_CLICKED",
+}
+
+
+def apply_click_campaign_tag(log) -> None:
+    """Marca a tag de campanha no profile ao clicar (idempotente; no-op se não mapeado)."""
+    tag = CLICK_TAG_BY_TEMPLATE.get(log.template_code)
+    if not tag or not log.profile_id:
+        return
+
+    profile = Profile.objects.filter(id=log.profile_id).first()
+    if profile and not profile.has_tag(tag):
+        profile.add_tag(tag)
+        profile.save(update_fields=["tags"])
+        logger.info(
+            "Click campaign tag aplicada: profile=%s tag=%s template=%s",
+            profile.id, tag, log.template_code,
+        )
+
 
 @shared_task(
     bind=True,
@@ -96,6 +119,9 @@ def process_webhook_event(self, webhook_event_id: int):
 
         if update_fields:
             log.save(update_fields=update_fields)
+
+        if new_status == "clicked":
+            apply_click_campaign_tag(log)
 
         event.status = "processed"
         event.message_log = log
@@ -200,6 +226,8 @@ def record_link_click(self, tracked_link_id: int):
             update_fields.append("status")
         if update_fields:
             log.save(update_fields=update_fields)
+
+        apply_click_campaign_tag(log)
 
         # 2) Incremento não-idempotente por último, num único UPDATE atômico.
         #    first_clicked_at via Coalesce (mantém o 1º valor). Nada depois dele

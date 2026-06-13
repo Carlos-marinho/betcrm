@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.messaging.models import MessageLog, TrackedLink
-from apps.messaging.tasks import record_link_click
+from apps.messaging.tasks import apply_click_campaign_tag, record_link_click
 from apps.messaging.tracking import should_track, wrap_links
 from apps.profiles.models import Profile
 
@@ -153,3 +153,57 @@ class TrackClickViewTests(TestCase):
             resp = self.client.get(reverse("track-click", args=["redir1"]))
         self.assertEqual(resp.status_code, 302)
         enqueue.assert_called_once_with(self.link.id)
+
+
+class CampaignClickTagTests(TestCase):
+    """Tag de campanha aplicada ao profile no clique (alimenta downsell)."""
+
+    def _make_log(self, template_code, channel="email"):
+        profile = Profile.objects.create(external_id=f"u-{template_code}")
+        log = MessageLog.objects.create(
+            profile=profile,
+            channel=channel,
+            recipient="x@example.com",
+            template_code=template_code,
+            status="sent",
+        )
+        return profile, log
+
+    def test_click_on_campaign_template_tags_profile(self):
+        profile, log = self._make_log("copa_freebet_brasil_marrocos_v1")
+        apply_click_campaign_tag(log)
+        profile.refresh_from_db()
+        self.assertTrue(profile.has_tag("COPA_CLICKED"))
+
+    def test_is_idempotent(self):
+        profile, log = self._make_log("copa_crosssell_brasil_marrocos_v1")
+        apply_click_campaign_tag(log)
+        apply_click_campaign_tag(log)
+        profile.refresh_from_db()
+        self.assertEqual(
+            [t for t in profile.tags if t == "COPA_CLICKED"], ["COPA_CLICKED"]
+        )
+
+    def test_noop_for_unmapped_template(self):
+        profile, log = self._make_log("welcome_ftd_v1")
+        apply_click_campaign_tag(log)
+        profile.refresh_from_db()
+        self.assertFalse(profile.has_tag("COPA_CLICKED"))
+
+    def test_downsell_template_does_not_tag(self):
+        # Quem clica no downsell não deve re-entrar no funil de downsell
+        profile, log = self._make_log("copa_downsell_brasil_marrocos_v1")
+        apply_click_campaign_tag(log)
+        profile.refresh_from_db()
+        self.assertFalse(profile.has_tag("COPA_CLICKED"))
+
+    @override_settings(TRACKING_BASE_URL="https://trk.test", SMS_LINK_TRACKING_ENABLED=True)
+    def test_record_link_click_applies_tag(self):
+        profile, log = self._make_log("copa_reativacao_brasil_marrocos_v1", channel="sms")
+        link = TrackedLink.objects.create(
+            slug="copa1", message_log=log, channel="sms",
+            flow_code="copa", destination_url="https://betnice.net/x",
+        )
+        record_link_click(link.id)
+        profile.refresh_from_db()
+        self.assertTrue(profile.has_tag("COPA_CLICKED"))
