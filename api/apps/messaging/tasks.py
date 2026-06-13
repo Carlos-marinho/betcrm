@@ -291,8 +291,11 @@ def retry_failed_messages(
             "template_code": log.template_code,
             "flow_execution_id": log.flow_execution_id,
         }
-        # Já recuperou em outra tentativa? Não reenvia.
-        if MessageLog.objects.filter(status__in=_SUCCESS_STATUSES, **combo_filter).exists():
+        # Já recuperou numa tentativa posterior à falha? Não reenvia.
+        # (sucesso anterior à falha não conta — ex: mesmo template reenviado depois.)
+        if MessageLog.objects.filter(
+            status__in=_SUCCESS_STATUSES, created_at__gte=log.created_at, **combo_filter
+        ).exists():
             skipped += 1
             continue
         # Esgotou o teto de tentativas? Desiste.

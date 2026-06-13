@@ -109,6 +109,23 @@ class RetryFailedSweepTests(TestCase):
         mock_delay.assert_not_called()
 
     @patch("apps.messaging.tasks.send_message_task.delay")
+    def test_sweep_ignores_success_before_failure(self, mock_delay):
+        # Sucesso ANTERIOR à falha (ex: mesmo template entregue antes) não conta
+        # como recuperação — a falha nova deve ser reenviada.
+        delivered = _failed_log(self.profile, status="delivered")
+        MessageLog.objects.filter(id=delivered.id).update(
+            created_at=timezone.now() - timedelta(hours=2)
+        )
+        failed = _failed_log(self.profile)
+        MessageLog.objects.filter(id=failed.id).update(
+            created_at=timezone.now() - timedelta(hours=1)
+        )
+
+        out = retry_failed_messages()
+        self.assertEqual(out["requeued"], 1)
+        mock_delay.assert_called_once()
+
+    @patch("apps.messaging.tasks.send_message_task.delay")
     def test_sweep_respects_attempt_cap(self, mock_delay):
         from django.utils import timezone
         from datetime import timedelta
