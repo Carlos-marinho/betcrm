@@ -3,10 +3,11 @@
 import React, { useState } from "react";
 import { useMessageLogs, useMessagingStats, useRetryMessage } from "@/lib/hooks";
 import { SendMessageModal } from "@/components/features/messages/send-message-modal";
+import { PurgeLogsModal } from "@/components/features/messages/purge-logs-modal";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
-  Activity, ChevronLeft, ChevronRight, Send, RotateCw,
+  Activity, ChevronLeft, ChevronRight, Send, RotateCw, Trash2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -82,6 +83,7 @@ export default function MessagesPage() {
   const [page, setPage] = useState(1);
   const [statsDays, setStatsDays] = useState(7);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
 
   const retryMessage = useRetryMessage();
 
@@ -141,6 +143,7 @@ export default function MessagesPage() {
   return (
     <>
       <SendMessageModal open={sendModalOpen} onClose={() => setSendModalOpen(false)} />
+      <PurgeLogsModal open={purgeModalOpen} onClose={() => setPurgeModalOpen(false)} />
       <div className="flex flex-col flex-1 min-h-0">
 
         {/* ── Sticky header: title + stats + filters + column headers ── */}
@@ -154,6 +157,13 @@ export default function MessagesPage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPurgeModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Limpar logs
+              </button>
               <button
                 onClick={() => setSendModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold text-background text-xs font-semibold hover:bg-gold/90 transition-colors"

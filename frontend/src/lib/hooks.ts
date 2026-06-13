@@ -913,6 +913,20 @@ export function useRetryMessage() {
   });
 }
 
+export function usePurgeMessageLogs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { all?: boolean; date_from?: string; date_to?: string }) => {
+      const { data } = await api.post("/messaging/logs/purge/", payload);
+      return data as { deleted: number };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["messaging-stats"] });
+    },
+  });
+}
+
 export function useProviders(channel?: string) {
   const qs = channel ? `?channel=${channel}` : "";
   return useQuery<PaginatedResponse<ProviderConfig>>({
