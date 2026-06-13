@@ -149,8 +149,16 @@ class PurgeLogsEndpointTests(TestCase):
     def setUp(self):
         self.profile = Profile.objects.create(external_id="u1", email="u@x.com")
         self.client = APIClient()
-        user = get_user_model().objects.create_user(username="admin", password="x")
+        user = get_user_model().objects.create_user(username="admin", password="x", is_staff=True)
         self.client.force_authenticate(user=user)
+
+    def test_purge_denied_for_non_staff(self):
+        self._log_at(0)
+        client = APIClient()
+        client.force_authenticate(user=get_user_model().objects.create_user(username="member", password="x"))
+        resp = client.post("/api/v1/messaging/logs/purge/", {"all": True}, format="json")
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(MessageLog.objects.count(), 1)
 
     def _log_at(self, days_ago: int):
         log = _failed_log(self.profile, status="sent")

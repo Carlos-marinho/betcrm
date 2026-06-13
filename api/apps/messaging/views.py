@@ -16,7 +16,7 @@ from rest_framework.decorators import (
     authentication_classes,
     permission_classes,
 )
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import MessageLog, ProviderConfig, WebhookEvent
@@ -132,9 +132,9 @@ class MessageLogViewSet(viewsets.ReadOnlyModelViewSet):
         retry_failed_messages.delay(message_log_ids=ids)
         return Response({"status": "queued", "ids": ids or "sweep"}, status=status.HTTP_202_ACCEPTED)
 
-    @action(detail=False, methods=["post"])
+    @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
     def purge(self, request):
-        """Apaga logs de mensagens. POST .../logs/purge/
+        """Apaga logs de mensagens. POST .../logs/purge/ (somente admin/staff)
 
         Body: {"all": true} para limpar tudo, ou {"date_from": "YYYY-MM-DD",
         "date_to": "YYYY-MM-DD"} (qualquer um opcional) para um intervalo por
