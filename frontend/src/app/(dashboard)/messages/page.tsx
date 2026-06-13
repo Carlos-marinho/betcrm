@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMessageLogs, useMessagingStats, useRetryMessage } from "@/lib/hooks";
+import { useMessageLogs, useMessagingStats, useRetryMessage, useFailedGrouped } from "@/lib/hooks";
 import { SendMessageModal } from "@/components/features/messages/send-message-modal";
 import { PurgeLogsModal } from "@/components/features/messages/purge-logs-modal";
 import { RetryFailedModal } from "@/components/features/messages/retry-failed-modal";
 import {
   Mail, MessageSquare, Bell, MessageCircle,
   CheckCircle2, XCircle, Clock, MailOpen, MousePointerClick,
-  Activity, ChevronLeft, ChevronRight, Send, RotateCw, Trash2,
+  Activity, ChevronLeft, ChevronRight, Send, RotateCw, Trash2, Repeat,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 50;
 
 const CHANNEL_FILTERS = [
   { value: "", label: "Todos canais" },
@@ -96,10 +98,21 @@ export default function MessagesPage() {
     });
   };
 
+  // Falhas são agrupadas pela chave de dedup (perfil/canal/template/fluxo),
+  // já que retries automáticos geram vários logs failed do mesmo destinatário.
+  const isGroupedView = statusFilter === "failed";
+
   const { data, isLoading } = useMessageLogs({
     channel: channelFilter || undefined,
     status: statusFilter || undefined,
     page,
+    enabled: !isGroupedView,
+  });
+
+  const { data: grouped, isLoading: groupedLoading } = useFailedGrouped({
+    channel: channelFilter || undefined,
+    page,
+    enabled: isGroupedView,
   });
 
   const { data: stats, isLoading: statsLoading } = useMessagingStats({
@@ -107,7 +120,9 @@ export default function MessagesPage() {
     days: statsDays,
   });
 
-  const totalPages = data ? Math.ceil(data.count / 20) : 1;
+  const listLoading = isGroupedView ? groupedLoading : isLoading;
+  const totalCount = isGroupedView ? grouped?.count : data?.count;
+  const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : 1;
 
   const periodLabel = PERIOD_OPTIONS.find((o) => o.value === statsDays)?.label ?? `${statsDays}d`;
 
@@ -156,7 +171,13 @@ export default function MessagesPage() {
             <div>
               <h1 className="font-display font-bold text-2xl">Mensagens</h1>
               <span className="text-sm text-muted-foreground mt-0.5 h-5 flex items-center">
-                {isLoading ? <Skeleton className="h-3.5 w-40" /> : `${data?.count.toLocaleString("pt-BR") ?? 0} mensagens no período`}
+                {listLoading ? (
+                  <Skeleton className="h-3.5 w-40" />
+                ) : isGroupedView ? (
+                  `${(totalCount ?? 0).toLocaleString("pt-BR")} destinatários com falha (agrupados)`
+                ) : (
+                  `${(totalCount ?? 0).toLocaleString("pt-BR")} mensagens no período`
+                )}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -263,22 +284,34 @@ export default function MessagesPage() {
           </div>
 
           {/* Column headers */}
-          <div className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
-            <div>Canal</div>
-            <div>Usuário</div>
-            <div>Template</div>
-            <div>Assunto</div>
-            <div>Status</div>
-            <div>Enviada</div>
-            <div className="text-right">Ações</div>
-          </div>
+          {isGroupedView ? (
+            <div className="grid grid-cols-[80px_120px_130px_1fr_90px_140px_92px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+              <div>Canal</div>
+              <div>Usuário</div>
+              <div>Template</div>
+              <div>Erro</div>
+              <div>Tentativas</div>
+              <div>Última tentativa</div>
+              <div className="text-right">Ações</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border/50 bg-card/40">
+              <div>Canal</div>
+              <div>Usuário</div>
+              <div>Template</div>
+              <div>Assunto</div>
+              <div>Status</div>
+              <div>Enviada</div>
+              <div className="text-right">Ações</div>
+            </div>
+          )}
         </div>
 
         {/* ── Scrollable rows ── */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="divide-y divide-border/50">
-            {isLoading && Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[80px_120px_130px_1fr_110px_120px_92px] px-4 py-3">
+            {listLoading && Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className={`grid ${isGroupedView ? "grid-cols-[80px_120px_130px_1fr_90px_140px_92px]" : "grid-cols-[80px_120px_130px_1fr_110px_120px_92px]"} px-4 py-3`}>
                 <div><Skeleton className="h-4 w-14" /></div>
                 <div><Skeleton className="h-4 w-20" /></div>
                 <div><Skeleton className="h-4 w-24" /></div>
@@ -289,7 +322,73 @@ export default function MessagesPage() {
               </div>
             ))}
 
-            {!isLoading && data?.results.map((msg) => {
+            {/* Visão agrupada por dedup (status = Falhou) */}
+            {!listLoading && isGroupedView && grouped?.results.map((g) => {
+              const ChanIcon = CHANNEL_ICON[g.channel] ?? Mail;
+              const chanBadge = CHANNEL_BADGE[g.channel] ?? "badge-muted";
+              const retrying = retryMessage.isPending && retryMessage.variables === g.last_id;
+              const lastAttempt = new Date(g.last_attempt_at);
+
+              return (
+                <div key={g.last_id} className="grid grid-cols-[80px_120px_130px_1fr_90px_140px_92px] px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center">
+                    <span className={chanBadge}>
+                      <ChanIcon className="w-3 h-3" />
+                      {g.channel}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="font-data text-xs text-muted-foreground truncate" title={g.recipient}>{g.profile_external_id}</span>
+                  </div>
+                  <div className="flex items-center">
+                    {g.template_code
+                      ? <span className="font-data text-xs text-foreground truncate">{g.template_code}</span>
+                      : <span className="text-muted-foreground/30">—</span>
+                    }
+                  </div>
+                  <div className="flex items-center min-w-0">
+                    <span className="text-xs text-red-400/80 truncate" title={g.error_message || undefined}>{g.error_message || "—"}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span
+                      className="inline-flex items-center gap-1 text-xs font-data text-muted-foreground"
+                      title={`${g.attempts} tentativa(s) de envio · ${g.retry_count} reprocessamento(s)`}
+                    >
+                      <Repeat className="w-3 h-3 opacity-60" />
+                      {g.attempts}×
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title={format(lastAttempt, "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+                    >
+                      {formatDistanceToNow(lastAttempt, { locale: ptBR, addSuffix: true })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {g.recovered ? (
+                      <span className="badge-teal" title="Recuperada por um envio posterior à falha">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Recuperada
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleRetry(g.last_id)}
+                        disabled={retrying}
+                        title={g.error_message ? `Falha: ${g.error_message}` : "Reenviar para este destinatário"}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-gold border border-gold/20 hover:bg-gold/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <RotateCw className={`w-3 h-3 ${retrying ? "animate-spin" : ""}`} />
+                        Reenviar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {!listLoading && !isGroupedView && data?.results.map((msg) => {
               const ChanIcon = CHANNEL_ICON[msg.channel] ?? Mail;
               const chanBadge = CHANNEL_BADGE[msg.channel] ?? "badge-muted";
               const statusCfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.sent;
@@ -343,18 +442,20 @@ export default function MessagesPage() {
               );
             })}
 
-            {!isLoading && data?.results.length === 0 && (
+            {!listLoading && (isGroupedView ? grouped?.results.length === 0 : data?.results.length === 0) && (
               <div className="px-4 py-16 text-center">
                 <Mail className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">Nenhuma mensagem encontrada para este filtro.</p>
+                <p className="text-sm text-muted-foreground">
+                  {isGroupedView ? "Nenhuma falha encontrada para este filtro." : "Nenhuma mensagem encontrada para este filtro."}
+                </p>
               </div>
             )}
           </div>
 
-          {data && data.count > 0 && (
+          {!!totalCount && totalCount > 0 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
               <p className="text-xs text-muted-foreground font-data">
-                Página {page} de {totalPages} · {data.count.toLocaleString("pt-BR")} total
+                Página {page} de {totalPages} · {totalCount.toLocaleString("pt-BR")} {isGroupedView ? "destinatários" : "total"}
               </p>
               <div className="flex items-center gap-1">
                 <button

@@ -664,7 +664,7 @@ export function useMessagingStats(params?: { channel?: string; days?: number }) 
   });
 }
 
-export function useMessageLogs(params?: { channel?: string; status?: string; page?: number }) {
+export function useMessageLogs(params?: { channel?: string; status?: string; page?: number; enabled?: boolean }) {
   const searchParams = new URLSearchParams();
   if (params?.channel) searchParams.set("channel", params.channel);
   if (params?.status) searchParams.set("status", params.status);
@@ -678,6 +678,43 @@ export function useMessageLogs(params?: { channel?: string; status?: string; pag
       return data;
     },
     refetchInterval: 30_000,
+    enabled: params?.enabled ?? true,
+  });
+}
+
+// ── Falhas agrupadas por dedup ─────────────────────────────────────────────────
+
+export interface FailedGroup {
+  last_id: number;
+  profile_id: number;
+  profile_external_id: string | null;
+  channel: "email" | "sms" | "push" | "whatsapp";
+  template_code: string | null;
+  flow_execution_id: number | null;
+  recipient: string;
+  subject: string;
+  error_message: string;
+  attempts: number;
+  retry_count: number;
+  first_attempt_at: string;
+  last_attempt_at: string;
+  recovered: boolean;
+}
+
+export function useFailedGrouped(params?: { channel?: string; page?: number; enabled?: boolean }) {
+  const searchParams = new URLSearchParams();
+  if (params?.channel) searchParams.set("channel", params.channel);
+  if (params?.page) searchParams.set("page", String(params.page));
+  const qs = searchParams.toString();
+
+  return useQuery<PaginatedResponse<FailedGroup>>({
+    queryKey: ["messages-failed-grouped", qs],
+    queryFn: async () => {
+      const { data } = await api.get(`/messaging/logs/failed-grouped/${qs ? `?${qs}` : ""}`);
+      return data;
+    },
+    refetchInterval: 30_000,
+    enabled: params?.enabled ?? true,
   });
 }
 
@@ -909,6 +946,7 @@ export function useRetryMessage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["messages-failed-grouped"] });
     },
   });
 }
@@ -925,6 +963,7 @@ export function useRetryAllFailed() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["messages-failed-grouped"] });
       queryClient.invalidateQueries({ queryKey: ["messaging-stats"] });
     },
   });
